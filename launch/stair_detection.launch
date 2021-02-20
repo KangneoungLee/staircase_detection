@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="stair_detection" type="stair_detection_ros" name="stair_detection_ros_node" launch-prefix="$(arg debug_args)" output="screen">
+          <param name="update_rate"            value="5"/>
+          <param name="offline_svm_training"        value="true"/>
+          <param name="use_svm_classifier"        value="false"/>
+          <param name="rgb_image_topic"      value="front_cam/camera/color/image_raw"/>
+          <param name="depth_image_topic"      value="front_cam/camera/depth/image_rect_raw"/>
+          <param name="camera_rgb_info_topic"      value="front_cam/camera/color/camera_info"/>
+          <param name="camera_depth_info_topic"    value="front_cam/camera/depth/camera_info"/> 
+          <param name="canny_filter_low_threshold"        value="25"/>
+          <param name="canny_filter_high_threshold"        value="40"/>
+          <param name="hough_transform_threshold"          value="75"/>
+          <param name="hough_transform_minumum_line_length"        value="40"/>
+          <param name="hough_transform_maximum_line_point_gap"        value="5"/>
+          <param name="minimum_number_of_lines_for_clustering"        value="3"/>
+          <param name="image_resize_height"        value="480"/>
+          <param name="image_resize_width"        value="848"/>
+
+<!-- offline test result parameter set -->
+          <param name="offline_performance_test"        value="true"/>
+          <param name="testing_set_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair"/>
+          <param name="result_save_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair_result"/>
+          <param name="testing_set_rgb_image_list_file"        value="test_rgb_img_file_list_filtered.txt"/>
+          <param name="testing_set_depth_image_list_file"        value="test_depth_img_file_list_filtered.txt"/>
+       
+     </node>
+
+</launch>

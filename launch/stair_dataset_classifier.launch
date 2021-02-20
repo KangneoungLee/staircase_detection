@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="stair_detection" type="training_test_set_classifier_ros" name="training_test_set_classifier_ros_node" launch-prefix="$(arg debug_args)" output="screen">
+          <param name="update_rate"            value="5"/>
+          <param name="training_set_dir"      value="/home/kangneoung/stair_detection/src/stair_detection/image_set/training"/>
+          <param name="test_set_dir"      value="/home/kangneoung/stair_detection/src/stair_detection/image_set/testing"/>
+          <param name="rgb_image_file_name"      value="vishnu_13_long_stair_close_rgb"/>
+          <param name="depth_image_file_name"    value="vishnu_13_long_stair_close_depth"/>  
+          <param name="rgb_image_extension"      value=".png"/>
+          <param name="depth_image_extension"    value=".png"/>
+          <param name="collection_time"            value="1"/>   <!--unit : sec -->
+          <param name="percent_of_test_set"            value="0.2"/>
+          <param name="save_rgb_depth_image_file"            value="true"/>      
+     </node>
+
+</launch>
