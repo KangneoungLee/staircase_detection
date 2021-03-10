@@ -32,7 +32,7 @@ class STAIR_DETEC_PRE_PROC{
 	~STAIR_DETEC_PRE_PROC();
 	
 	void stair_line_extraction(cv::Mat rgb_image,   std::vector<cv::Vec4i> *edge_lines, cv::Mat* resized_rgb_image, cv::Mat* resized_gray_image, bool encoding_rgb_flag = false, unsigned short preproc_resize_height = 800, unsigned short preproc_resize_width = 450,  unsigned short canny_lt=50,
-	                                                       unsigned short canny_ht=100,  unsigned short houghp_th = 50,  unsigned short houghp_min_line_len = 50, unsigned short houghp_max_line_gap =5);
+	                                                       unsigned short canny_ht=100,  unsigned short houghp_th = 50,  unsigned short houghp_min_line_len = 50, unsigned short houghp_max_line_gap =5, int noise_rm_pre_proc_index = 1);
 														   
 	void select_lines_from_hough(const cv::Mat& rgb_input, const cv::Mat& gray_input, std::vector<cv::Vec4i>* org_edge_lines,  std::vector<cv::Vec4i>* final_edge_lines,  std::map<float, std::vector<cv::Vec4i>>*  lines_hist, std::map<int, std::vector<cv::Vec4i>> *lines_hist_top_three, float maxslope_in_pixel = 0.6, float minslope_in_pixel = 0.05);
 	

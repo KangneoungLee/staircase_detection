@@ -9,7 +9,7 @@ STAIR_DETEC_PRE_PROC::~STAIR_DETEC_PRE_PROC(){}
 
 void STAIR_DETEC_PRE_PROC::stair_line_extraction(cv::Mat rgb_image,   std::vector<cv::Vec4i> *edge_lines, cv::Mat* resized_rgb_image, cv::Mat* resized_gray_image, bool encoding_rgb_flag,
 unsigned short preproc_resize_height, unsigned short preproc_resize_width,  unsigned short canny_lt, unsigned short canny_ht,  unsigned short houghp_th,  
-unsigned short houghp_min_line_len, unsigned short houghp_max_line_gap)
+unsigned short houghp_min_line_len, unsigned short houghp_max_line_gap, int noise_rm_pre_proc_index)
 {
 	cv::Mat resized_rgb_image_tmp;
 	cv::Mat resized_gray_image_tmp;
@@ -37,9 +37,18 @@ unsigned short houghp_min_line_len, unsigned short houghp_max_line_gap)
 	 
 	cv::Mat element = getStructuringElement( cv::MORPH_ELLIPSE , cv::Size( 20,10),cv::Point( -1, -1) );  /* Size (width, height),  cv::Point( -1, -1) means center point of kernel*/
 	
-	
-	 cv::dilate(resized_gray_image_tmp , resized_gray_image_dilate_out, element );
- 
+	if(noise_rm_pre_proc_index == 1)   /*dilate*/
+	{
+	    cv::dilate(resized_gray_image_tmp , resized_gray_image_dilate_out, element );	
+	}
+	else if(noise_rm_pre_proc_index == 2)  /*erode*/
+	{ 
+      cv::erode(resized_gray_image_tmp , resized_gray_image_dilate_out, element );
+	}
+	else  /*no noise remove*/
+	{
+		resized_gray_image_dilate_out = resized_gray_image_tmp.clone();
+	}
 	 //cv::bilateralFilter(resized_gray_image_dilate_out, resized_gray_image_tmp_out_bilat, 5, 15, 20);
 	 
 	cv::Canny(resized_gray_image_dilate_out, resized_gray_image_out, canny_lt, canny_ht, 3);
