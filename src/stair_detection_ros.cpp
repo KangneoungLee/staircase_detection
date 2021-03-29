@@ -12,7 +12,7 @@
 #include <stair_detection/debug_msg_1.h>
 #include <stair_detection/stairlocation.h>
 #include <stair_detection/pixel_stairlocation.h>
-
+#include <std_msgs/Int8.h>
 
 #include <sys/stat.h> /*directory check*/
 //#include <windows.h>  /*directory check*/
@@ -51,6 +51,12 @@ class STAIR_DETECTION_ROS{
 		image_transport::Publisher _rgb_roi_pub;
          ros::Subscriber _rgb_cam_info_sub;
 		 ros::Subscriber _depth_cam_info_sub;
+		 ros::Subscriber _MB_flag_sub;
+		 ros::Subscriber  _detec_trigger_sub;
+		 
+		 int _MB_flag_status;
+		 int _detec_trigger_flag;
+		 
 		 ros::Publisher _stair_pos_pub;
 		 ros::Publisher _stair_center_pixel_pub;
 		 
@@ -160,6 +166,9 @@ class STAIR_DETECTION_ROS{
 		void rgb_cam_info_callback(const sensor_msgs::CameraInfo::ConstPtr& msg, int value);
 		void depth_cam_info_callback(const sensor_msgs::CameraInfo::ConstPtr& msg, int value);
 		
+		void executeCB_MBflag(const std_msgs::Int8::ConstPtr& msg,int value);
+		void executeCB_detect_trigger_flag(const std_msgs::Int8::ConstPtr& msg,int value);
+		
 		/*offline test function*/
 		void read_rgb_depth_file_list();
 	 
@@ -181,7 +190,9 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 std::string camera_rgb_info_topic = "front_cam/camera/color/camera_info";
 	 std::string camera_depth_info_topic = "front_cam/camera/depth/camera_info";
 	 std::string camera_stair_pose_topic = "front_cam/camera/stair_pose";
-	  std::string camera_stair_center_pixel_topic = "front_cam/camera/center_pixel";
+	 std::string camera_stair_center_pixel_topic = "front_cam/camera/center_pixel";
+	 std::string MB_flag_sub_topic= "MB_flag";
+	 std::string detect_trigger_flag_sub_topic ="detec_logic_trigger";
 	 
 	
 	 param_nh.getParam("depth_image_topic",depth_image_topic);
@@ -190,6 +201,8 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 param_nh.getParam("camera_rgb_info_topic",camera_rgb_info_topic);
 	 param_nh.getParam("camera_stair_pose_topic",camera_stair_pose_topic);
 	 param_nh.getParam("camera_stair_center_pixel_topic",camera_stair_center_pixel_topic);
+	 param_nh.getParam("MB_flag_sub_topic",MB_flag_sub_topic);
+	 param_nh.getParam("detect_trigger_flag_sub_topic",detect_trigger_flag_sub_topic);
 	 
 	 
 	 bool encoding_rgb_flag = false;
@@ -367,7 +380,10 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	    this->_depth_cam_info_sub = main_nh.subscribe<sensor_msgs::CameraInfo>(camera_depth_info_topic, 1, boost::bind(&STAIR_DETECTION_ROS::depth_cam_info_callback, this,_1,0));
 	 }
 /** Initialize STAIR_DETEC_PRE_PROC */
-
+       
+	 this->_MB_flag_sub = main_nh.subscribe<std_msgs::Int8>(MB_flag_sub_topic, 1, boost::bind(&STAIR_DETECTION_ROS::executeCB_MBflag, this,_1,0));  
+	 this->_detec_trigger_sub = main_nh.subscribe<std_msgs::Int8>(detect_trigger_flag_sub_topic, 1, boost::bind(&STAIR_DETECTION_ROS::executeCB_detect_trigger_flag, this,_1,0));  
+	   
      this->_stair_pos_pub = main_nh.advertise<stair_detection::stairlocation>(camera_stair_pose_topic, 2);
 	 this->_stair_center_pixel_pub = main_nh.advertise<stair_detection::pixel_stairlocation>(camera_stair_center_pixel_topic, 2);
 
@@ -483,6 +499,32 @@ void STAIR_DETECTION_ROS::read_rgb_depth_file_list()
 	 }	
 }
 
+
+void STAIR_DETECTION_ROS::executeCB_detect_trigger_flag(const std_msgs::Int8::ConstPtr& msg,int value)
+{
+	if(msg->data == 1)
+	{
+		this->_detec_trigger_flag = 1;
+	}
+	else
+	{
+		this->_detec_trigger_flag = 0;
+		this->_MB_flag_status = 0;
+	}
+	
+}
+
+
+void STAIR_DETECTION_ROS::executeCB_MBflag(const std_msgs::Int8::ConstPtr& msg,int value)
+{
+	if(msg->data == 2)
+	{
+	   this->_MB_flag_status=msg->data;
+	}
+}
+
+
+
 void STAIR_DETECTION_ROS::rgb_image_callback(const sensor_msgs::Image::ConstPtr& msg , int value)
 {
 	std::lock_guard<std::mutex> lock(_lock);
@@ -497,6 +539,7 @@ void STAIR_DETECTION_ROS::rgb_image_callback(const sensor_msgs::Image::ConstPtr&
 	}
 	
 }
+
 
 
 void STAIR_DETECTION_ROS::depth_image_callback(const sensor_msgs::Image::ConstPtr& msg,int value)
@@ -1188,11 +1231,14 @@ void STAIR_DETECTION_ROS::run()
 {  
     while(ros::ok())
 	{
-	   this->pre_proc_run();
+		if((this->_MB_flag_status !=2)&&(this->_detec_trigger_flag == 1))
+		{  
+		   this->pre_proc_run();
 	   
-	   sensor_msgs::ImagePtr rgb_roi_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->_stair_case_output_image).toImageMsg();
+	       sensor_msgs::ImagePtr rgb_roi_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->_stair_case_output_image).toImageMsg();
 	   
-	   this->_rgb_roi_pub.publish(rgb_roi_msg);
+	       this->_rgb_roi_pub.publish(rgb_roi_msg);
+		}
 	   //ros::spin();
 	   ros::spinOnce();
 	   this->_loop_rate->sleep();
