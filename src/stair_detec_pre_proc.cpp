@@ -457,7 +457,7 @@ int min_numof_lines_4_cluster, int predefined_roi_height, int predefined_roi_wid
 			   /* type of  center_p_of_1stlines_centers is Mat class with number of label  by  number of dimensions */
 			   /* if we feed (x,y) coordinate and set 3 labels for classification, the output of center is  3 by 2 mat class , first column means x coordinate and second column means y cooridnate*/ 
 			   
-			// std::cout<<"errorsquaresum_1st : "<<errorsquaresum_1st <<"\n"<<std::endl;
+			 //std::cout<<"errorsquaresum_1st : "<<errorsquaresum_1st <<"\n"<<std::endl;
     }
 	
    cv::Mat center_p_of_2ndlines_centers = cv::Mat::zeros(clusterCount, 2, CV_32F);

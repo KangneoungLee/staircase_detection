@@ -9,9 +9,9 @@
 #include "stair_detection/stair_detec_pre_proc.h"
 #include "stair_detection/stair_detec_cost_func.h"
 #include "stair_detection/stair_detec_only_rgb.h"
-#include <stair_detection/debug_msg_1.h>
-#include <stair_detection/stairlocation.h>
-#include <stair_detection/pixel_stairlocation.h>
+#include <stair_custom_msg/debug_msg_1.h>
+#include <stair_custom_msg/stairlocation.h>
+#include <stair_custom_msg/pixel_stairlocation.h>
 #include <std_msgs/Int8.h>
 
 #include <sys/stat.h> /*directory check*/
@@ -123,9 +123,9 @@ class STAIR_DETECTION_ROS{
 		 std::vector<float> debug_gradient_diff;
 		 std::vector<float> debug_depth_y_error;
 		 
-		 stair_detection::stairlocation _stair_pose;
-		 stair_detection::pixel_stairlocation _stair_center;
-		 stair_detection::debug_msg_1 _debug_msg1;
+		 stair_custom_msg::stairlocation _stair_pose;
+		 stair_custom_msg::pixel_stairlocation _stair_center;
+		 stair_custom_msg::debug_msg_1 _debug_msg1;
 		 
 		 std::string  _camera_frame_id;
 		 
@@ -384,10 +384,10 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 this->_MB_flag_sub = main_nh.subscribe<std_msgs::Int8>(MB_flag_sub_topic, 1, boost::bind(&STAIR_DETECTION_ROS::executeCB_MBflag, this,_1,0));  
 	 this->_detec_trigger_sub = main_nh.subscribe<std_msgs::Int8>(detect_trigger_flag_sub_topic, 1, boost::bind(&STAIR_DETECTION_ROS::executeCB_detect_trigger_flag, this,_1,0));  
 	   
-     this->_stair_pos_pub = main_nh.advertise<stair_detection::stairlocation>(camera_stair_pose_topic, 2);
-	 this->_stair_center_pixel_pub = main_nh.advertise<stair_detection::pixel_stairlocation>(camera_stair_center_pixel_topic, 2);
+     this->_stair_pos_pub = main_nh.advertise<stair_custom_msg::stairlocation>(camera_stair_pose_topic, 2);
+	 this->_stair_center_pixel_pub = main_nh.advertise<stair_custom_msg::pixel_stairlocation>(camera_stair_center_pixel_topic, 2);
 
-     this->_debug_msg_1_pub = main_nh.advertise<stair_detection::debug_msg_1>("/front_cam/stair_detection/debug_1", 2);
+     this->_debug_msg_1_pub = main_nh.advertise<stair_custom_msg::debug_msg_1>("/front_cam/stair_detection/debug_1", 2);
 
      this->str_det_prprc = new STAIR_DETEC_PRE_PROC();
 	 this->str_det_cost_func = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);

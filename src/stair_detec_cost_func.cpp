@@ -122,7 +122,15 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 
 	cv::resize(depth_img, resized_depth_img_tmp, cv::Size(preproc_resize_width,preproc_resize_height), cv::INTER_AREA);  /*resize image to reduce computation cost */
 	
-	if(resized_depth_img_tmp.type() == CV_16UC1) resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
+	if(resized_depth_img_tmp.type() == CV_16UC1)
+	{
+		resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
+	}
+	else if(resized_depth_img_tmp.type() == CV_32F)
+	{
+		resized_depth_img_tmp_32f = resized_depth_img_tmp.clone();
+	}
+	
 
 	 double t;
      if(time_debug_flag == true) t = (double)cv::getTickCount();
@@ -175,12 +183,13 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 	   
 	   float center_point_x_coor;     /*xyz coordinate*/
        float center_point_y_coor;    /*xyz coordinate*/
+	   
 
 	   float depth_center =  resized_depth_img_tmp_32f.at<float>(center_point_row,center_point_col);
-	   float y_world_coor_center = (py - center_point_y)/fy*depth_center;  
-	   //std::cout<<"depth_center : "<< depth_center<<" \n"<<std::endl;
+	 //  float y_world_coor_center = (py - center_point_y)/fy*depth_center;  
+
 		  
-	  float y_world_coor_cp = 0;
+	 // float y_world_coor_cp = 0;
 	  
 	  /* center point y offset calculation */
 	//  if((depth_center<6)&&(depth_center>1))
@@ -257,7 +266,7 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 	//	   }
 		  
 	// }
-	  
+	
 	  
 	  if(depth_center>0.1)
 	  {

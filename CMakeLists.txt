@@ -13,6 +13,8 @@ set(ROS_CXX_PKGS
      geometry_msgs
      image_transport
      message_runtime
+     message_generation
+     stair_custom_msg
 )
 
 
@@ -56,11 +58,13 @@ add_definitions(${PCL_DEFINITIONS})
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+##add_message_files(
+##   FILES
+##   stairlocation.msg
+##   pixel_stairlocation.msg
+##   debug_msg_1.msg
+
+## )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -77,10 +81,11 @@ add_definitions(${PCL_DEFINITIONS})
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
+## generate_messages(
+##   DEPENDENCIES
+##   std_msgs  # Or other packages containing msgs
+##   geometry_msgs
+## )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -139,10 +144,13 @@ target_link_libraries(stair_detec_pre_proc ${OpenCV_LIBS} ${Boost_LIBRARIES})
 add_library(stair_detec_cost_func src/stair_detec_cost_func.cpp)
 target_link_libraries(stair_detec_cost_func ${OpenCV_LIBS} ${Boost_LIBRARIES})
 
+add_library(stair_detec_only_rgb src/stair_detec_only_rgb.cpp)
+target_link_libraries(stair_detec_only_rgb ${OpenCV_LIBS} ${Boost_LIBRARIES})
+
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
@@ -150,7 +158,8 @@ target_link_libraries(stair_detec_cost_func ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # add_executable(${PROJECT_NAME}_node src/stair_detection_node.cpp)
 
 add_executable(stair_detection_ros src/stair_detection_ros.cpp)
-target_link_libraries(stair_detection_ros stair_detec_pre_proc stair_detec_cost_func ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(stair_detection_ros stair_detec_pre_proc stair_detec_cost_func stair_detec_only_rgb ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(stair_detection_ros ${catkin_EXPORTED_TARGETS})
 
 add_executable(svm_training_ros src/svm_training_ros.cpp)
 target_link_libraries(svm_training_ros ${catkin_LIBRARIES} ${OpenCV_LIBS})
