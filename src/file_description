@@ -1,0 +1,18 @@
+Staircase detection sw description
+
+-stair_detection_ros.cpp  : main function call for staircase detection including SVM classifier and rule-base classifier
+
+- stair_detec_only_rgb.cpp : sub-function using only RGB image
+
+- stair_detec_pre_proc.cpp : line extraction
+
+- stiar_detec_cost_func.cpp : calculate three factors
+
+
+
+
+- util/correlation_sampe_with_svm_ros.cpp : extract the sample points in the true label set of SVM
+
+- util/svm_training_ros.cpp : offline svm training using training set
+
+- util/svm_trainingset_genfromdir_ros.cpp : 
