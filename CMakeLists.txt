@@ -161,17 +161,20 @@ add_executable(stair_detection_ros src/stair_detection_ros.cpp)
 target_link_libraries(stair_detection_ros stair_detec_pre_proc stair_detec_cost_func stair_detec_only_rgb ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_dependencies(stair_detection_ros ${catkin_EXPORTED_TARGETS})
 
-add_executable(svm_training_ros src/svm_training_ros.cpp)
+add_executable(svm_training_ros src/util/svm_training_ros.cpp)
 target_link_libraries(svm_training_ros ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(training_test_set_classifier_ros src/training_test_set_classifier_ros.cpp)
+add_executable(training_test_set_classifier_ros src/util/training_test_set_classifier_ros.cpp)
 target_link_libraries(training_test_set_classifier_ros ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(svm_trainingset_genfromdir_ros src/svm_trainingset_genfromdir_ros.cpp)
+add_executable(svm_trainingset_genfromdir_ros src/util/svm_trainingset_genfromdir_ros.cpp)
 target_link_libraries(svm_trainingset_genfromdir_ros stair_detec_cost_func ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(correlation_sample_with_svm_ros src/correlation_sample_with_svm_ros.cpp)
+add_executable(correlation_sample_with_svm_ros src/util/correlation_sample_with_svm_ros.cpp)
 target_link_libraries(correlation_sample_with_svm_ros ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(generate_img_list src/util/generate_img_list.cpp)
+target_link_libraries(generate_img_list ${catkin_LIBRARIES})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
