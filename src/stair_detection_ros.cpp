@@ -650,7 +650,7 @@ void STAIR_DETECTION_ROS::pre_proc_run()
        cv::Mat resized_rgb_image_main; 	   
 	   
 	   int while_count = 0;
-	   int while_count_th =5;
+	   int while_count_th =1;
 	 
      //std::cout<<"_offline_performance_test : "<<this->_offline_performance_test<<"\n"<<std::endl;	 
 	 //std::cout<<"_use_only_rgb_to_detect_staircase : "<<this->_use_only_rgb_to_detect_staircase<<"\n"<<std::endl;
