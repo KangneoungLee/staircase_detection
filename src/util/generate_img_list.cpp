@@ -7,38 +7,62 @@
 #include <sys/types.h>/*this io header is for Linux*/
 #include <dirent.h>/*this io header is for Linux*/
 
+#include    <sys/stat.h>
+
  std:: ofstream text_filter_in;
+ std::vector<std::string> rugdset_folder;
+ 
+  std::vector<std::string> return_;
+ 
+ bool hh_isdir( const std::string& _path )
+ {
+     int         i;
+    struct stat buf;
+    char        *ptr;
+
+    printf("%s: ",_path.c_str());
+    if (lstat(_path.c_str(), &buf) < 0) {
+            //err_ret("lstat error");
+            return false;
+        }
+    
+	if (S_ISDIR(buf.st_mode))  return true;
+	
+	return false; 
+
+}
  
  
- 
- std::vector<std::string> get_files_inDirectory_Linux(const std::string& _path)
+ bool get_files_inDirectory_Linux(const std::string& _path)
 {
-    DIR *dir;
+ 	
+	DIR *dir;
 	
 	struct dirent *ent;
    
     dir = opendir(_path.c_str());
    
-    std::vector<std::string> return_;
+   
 	
 	if(dir != NULL)
 	{
 		while ((ent = readdir(dir))!=NULL)
-		{
-			return_.push_back(ent->d_name);
+		{	
+			return_.push_back(ent->d_name);	
 		}
 		closedir(dir);
+		return true;
 	}
 	else
 	{
 		/*could not open directory*/
 		std::cout<<"could not open directory"<<std::endl;
-	         perror("");	
-			 
+		return false;
+	    //     perror("");	
 	}
 
  
-    return return_;
+    return false;
 }
  
  
@@ -79,8 +103,12 @@ class GEN_IMG_LIST{
 		 ros::Rate* _loop_rate;
 
 		 std::string  _img_folder_dir;
-		 std::string  _img_folder_dir2;
-		  std::string  _txt_save_folder_dir;
+		 //std::string  _annotation_dir;
+		 std::string  _txt_save_folder_dir;
+		 
+		 std::string  _image_dir_prefix;
+		 std::string  _annotation_dir_prefix;
+		 std::string  _dataset_prefix;
 		 
          bool _segmentation_list_extract = false;
 			 
@@ -114,12 +142,24 @@ GEN_IMG_LIST::GEN_IMG_LIST(ros::NodeHandle m_nh, ros::NodeHandle p_nh):main_nh(m
 	 param_nh.getParam("segmentation_list_extract",segmentation_list_extract);
 	 this->_segmentation_list_extract = segmentation_list_extract;
 	  
-	 if(segmentation_list_extract == true)
+	 if( this->_segmentation_list_extract == true)
 	 {
-	     std::string  img_folder_dir2 ="/home/kangneoung/stair_detection/src/stair_detection/image_set/tamu_cs/testing";	 
-		 param_nh.getParam("img_folder_dir2",img_folder_dir2);
+	     //std::string  annotation_dir ="/home/kangneoung/RUGD_dataset/RUGD_annotations_gray/training";	 
+		 //param_nh.getParam("annotation_dir",annotation_dir);
 		 
-		 this->_img_folder_dir2 = img_folder_dir2; 
+		 //this->_annotation_dir = annotation_dir; 
+		 std::string  image_dir_prefix ="images";
+		 param_nh.getParam("image_dir_prefix",image_dir_prefix);
+		 this->_image_dir_prefix = image_dir_prefix;
+		 
+		 std::string  annotation_dir_prefix ="annotations";
+		 param_nh.getParam("annotation_dir_prefix",annotation_dir_prefix);
+		 this->_annotation_dir_prefix = annotation_dir_prefix;
+		 
+		 std::string  dataset_prefix ="training";
+		 param_nh.getParam("dataset_prefix",dataset_prefix);
+		 this->_dataset_prefix = dataset_prefix;
+		 
 	 }
 	 
 	 std::string  text_file_name ="testing_rgb_img_file_list.txt";
@@ -158,36 +198,104 @@ GEN_IMG_LIST::~GEN_IMG_LIST()
 
 void GEN_IMG_LIST::pre_proc_run()
 {     
-
-     std::vector<std::string> files_in_dir;
-     
-     files_in_dir=get_files_inDirectory_Linux(this->_img_folder_dir);
-	 
-	 std::vector<std::string>::iterator it;
-	 
-	 for (it = files_in_dir.begin(); it != files_in_dir.end(); it++)
-     {
-		 std::istringstream ss(*it);
-		 std::string stringBuffer;
-		
-		 bool img_file_name_pass_flag = false;
+     if( this->_segmentation_list_extract == true)
+	 {
+		 rugdset_folder.push_back("creek");
+		 rugdset_folder.push_back("park-1");
+		 rugdset_folder.push_back("park-2");
+		 rugdset_folder.push_back("park-8");
+		 rugdset_folder.push_back("trail");
+		 rugdset_folder.push_back("trail-3");
+		 rugdset_folder.push_back("trail-4");
+		 rugdset_folder.push_back("trail-5");
+		 rugdset_folder.push_back("trail-6");
+		 rugdset_folder.push_back("trail-7");
+		 rugdset_folder.push_back("trail-9");
+		 rugdset_folder.push_back("trail-10");
+		 rugdset_folder.push_back("trail-11");
+		 rugdset_folder.push_back("trail-12");
+		 rugdset_folder.push_back("trail-13");
+		 rugdset_folder.push_back("trail-14");
+		 rugdset_folder.push_back("trail-15");
+		 rugdset_folder.push_back("village");
 		 
-		 while (std::getline(ss, stringBuffer, '.'))
-		 {
-             if((stringBuffer == "png")||(stringBuffer == "jpg"))
-			 {
-                img_file_name_pass_flag = true;
-				break;
-			 }				 
-
-         }
+		 std::vector<std::string> files_in_dir;
 		 
-		 if(img_file_name_pass_flag == true)
+		 std::vector<std::string>::iterator tr;
+		 for (tr = rugdset_folder.begin(); tr != rugdset_folder.end(); tr++)
 		 {
-		     text_filter_in << *it <<std::endl;
+			     std::string dir_temp = this->_img_folder_dir +"/" + *tr ;
+		         bool flag = get_files_inDirectory_Linux(dir_temp);
 		 }
+		 
+		 files_in_dir=return_;
+		 
+		 std::vector<std::string>::iterator it;
+		 
+		 
+		 for (it = files_in_dir.begin(); it != files_in_dir.end(); it++)
+         {
+		    std::istringstream ss(*it);
+		    std::string stringBuffer;
+		
+		    bool img_file_name_pass_flag = false;
+		    
+			std::cout<<*it<<std::endl;
+			
+		    while (std::getline(ss, stringBuffer, '.'))
+		    {
+                if((stringBuffer == "png")||(stringBuffer == "jpg"))
+			    {
+                   img_file_name_pass_flag = true;
+				   break;
+			    } 				 
+
+            }
+		 
+		   if(img_file_name_pass_flag == true)
+		   {
+			   std::string images_dir =  this->_image_dir_prefix+ "/"+ this->_dataset_prefix+"/"+ *it ;
+			   std::string annotations_dir =  this->_annotation_dir_prefix+ "/"+ this->_dataset_prefix+"/"+ *it ;
+		       text_filter_in << images_dir <<" "<<annotations_dir<<std::endl;
+		   }
+	     }
+		 
 	 }
+		 
 	 
+	 else
+	 {
+        std::vector<std::string> files_in_dir;
+     
+		bool flag = get_files_inDirectory_Linux(this->_img_folder_dir);
+		 
+		files_in_dir=return_;
+	 
+	    std::vector<std::string>::iterator it;
+	 
+	    for (it = files_in_dir.begin(); it != files_in_dir.end(); it++)
+        {
+		    std::istringstream ss(*it);
+		    std::string stringBuffer;
+		
+		    bool img_file_name_pass_flag = false;
+		 
+		    while (std::getline(ss, stringBuffer, '.'))
+		    {
+                if((stringBuffer == "png")||(stringBuffer == "jpg"))
+			    {
+                   img_file_name_pass_flag = true;
+				   break;
+			    } 				 
+
+            }
+		 
+		   if(img_file_name_pass_flag == true)
+		   {
+		       text_filter_in << *it <<std::endl;
+		   }
+	    }
+	 }
 }
 
 

@@ -29,7 +29,7 @@ enum training_element
 };
 
 unsigned int string_read_count = 0;
-bool svm_predict_test = true;
+bool svm_predict_test = false;
 
 class SVM_TRAINING_ROS{
 

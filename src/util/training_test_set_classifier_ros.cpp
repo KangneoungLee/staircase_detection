@@ -46,7 +46,11 @@ class TRAINING_TEST_SET_ROS{
 		 cv::Mat _stair_case_output_image;
 		 
 		 std::string  _training_set_dir;
+		 std::string  _training_set_rgb_dir;
+		 std::string  _training_set_depth_dir;
 		 std::string  _test_set_dir;
+		 std::string  _test_set_rgb_dir;
+		 std::string  _test_set_depth_dir;
 		 std::string  _rgb_image_file_name;
 		 std::string  _depth_image_file_name;
 		 std::string  _rgb_image_extension;
@@ -129,7 +133,11 @@ TRAINING_TEST_SET_ROS::TRAINING_TEST_SET_ROS(ros::NodeHandle m_nh, ros::NodeHand
 	 
 	 
 	 this->_training_set_dir = training_set_dir;
+	 this->_training_set_rgb_dir = this->_training_set_dir + "/" + "rgb";
+	 this->_training_set_depth_dir = this->_training_set_dir + "/" + "depth";
 	 this->_test_set_dir = test_set_dir;
+	 this->_test_set_rgb_dir = this->_test_set_dir + "/" + "rgb"; 
+	 this->_test_set_depth_dir = this->_test_set_dir + "/" + "depth";
 	 this->_rgb_image_file_name = rgb_image_file_name;
 	 this->_depth_image_file_name = depth_image_file_name;
 	 this->_rgb_image_extension = rgb_image_extension;
@@ -176,10 +184,10 @@ TRAINING_TEST_SET_ROS::TRAINING_TEST_SET_ROS(ros::NodeHandle m_nh, ros::NodeHand
      this->_loop_rate = new ros::Rate(update_rate);	
 	
 	
-	 std::string training_rgb_txt_file_dir =  this->_training_set_dir + "/" + "training_rgb_img_file_list.txt";
-	 std::string training_depth_txt_file_dir =  this->_training_set_dir + "/" + "training_depth_img_file_list.txt";
-	 std::string  test_rgb_txt_file_dir = this->_test_set_dir + "/" + "test_rgb_img_file_list.txt";
-	 std::string  test_depth_txt_file_dir = this->_test_set_dir + "/" + "test_depth_img_file_list.txt";
+	 std::string training_rgb_txt_file_dir =  this->_training_set_rgb_dir + "/" + "training_rgb_img_file_list.txt";
+	 std::string training_depth_txt_file_dir =  this->_training_set_depth_dir + "/" + "training_depth_img_file_list.txt";
+	 std::string  test_rgb_txt_file_dir = this->_test_set_rgb_dir + "/" + "test_rgb_img_file_list.txt";
+	 std::string  test_depth_txt_file_dir = this->_test_set_depth_dir + "/" + "test_depth_img_file_list.txt";
 	
      this->_training_file_rgb_list.open(training_rgb_txt_file_dir, std::ofstream::app);
 	 this->_training_file_depth_list.open(training_depth_txt_file_dir, std::ofstream::app);
@@ -261,14 +269,16 @@ void TRAINING_TEST_SET_ROS::rgb_depth_image_callback(const sensor_msgs::Image::C
 	    std::cout<<"this->_depth_count : "<<this->_depth_count<<"\n"<<std::endl;
 	    std::cout<<"this->_rgb_count : "<<this->_rgb_count<<"\n"<<std::endl;
 		
-		str_rgb_index = std::to_string(this->_rgb_count);
-		str_depth_index = std::to_string(this->_rgb_count);
+		//int temp_rgb_index = 1000 - this->_rgb_count;
 		
-		full_rgb_training_data_dir =  this->_training_set_dir + "/" +  this->_rgb_image_file_name + "_" + str_rgb_index + this->_rgb_image_extension;
-		full_depth_training_data_dir = this->_training_set_dir + "/" +  this->_depth_image_file_name + "_" + str_depth_index + this->_depth_image_extension;
+		str_rgb_index = std::to_string(this->_rgb_count); //std::to_string(temp_rgb_index);//
+		str_depth_index = std::to_string(this->_rgb_count); //std::to_string(temp_rgb_index);//
+		
+		full_rgb_training_data_dir =  this->_training_set_rgb_dir + "/" +  this->_rgb_image_file_name + "_" + str_rgb_index + this->_rgb_image_extension;
+		full_depth_training_data_dir = this->_training_set_depth_dir + "/" +  this->_depth_image_file_name + "_" + str_depth_index + this->_depth_image_extension;
 		 
-		full_rgb_test_data_dir = this->_test_set_dir + "/" +  this->_rgb_image_file_name + "_" + str_rgb_index + this->_rgb_image_extension;
-		full_depth_test_data_dir = this->_test_set_dir + "/" + this->_depth_image_file_name + "_" + str_depth_index + this->_depth_image_extension;
+		full_rgb_test_data_dir = this->_test_set_rgb_dir + "/" +  this->_rgb_image_file_name + "_" + str_rgb_index + this->_rgb_image_extension;
+		full_depth_test_data_dir = this->_test_set_depth_dir + "/" + this->_depth_image_file_name + "_" + str_depth_index + this->_depth_image_extension;
 		
 		rgb_data_file_name = this->_rgb_image_file_name + "_" + str_rgb_index + this->_rgb_image_extension;
 		depth_data_file_name = this->_depth_image_file_name + "_" + str_depth_index + this->_depth_image_extension;
@@ -278,6 +288,19 @@ void TRAINING_TEST_SET_ROS::rgb_depth_image_callback(const sensor_msgs::Image::C
 		//std::cout<<"full_depth_training_data_dir : "<<full_depth_training_data_dir<<"\n"<<std::endl;
 		//std::cout<<"full_rgb_test_data_dir : "<<full_rgb_test_data_dir<<"\n"<<std::endl;
 		//std::cout<<"full_depth_test_data_dir : "<<full_depth_test_data_dir<<"\n"<<std::endl;
+		
+		if(this->_percent_of_test_set == 0)
+		{
+			this->_training_file_rgb_list<< rgb_data_file_name <<"\n";
+			this->_training_file_depth_list<< depth_data_file_name <<"\n";
+			
+			cv::imwrite( full_rgb_training_data_dir, this->_rgb_image);
+			cv::imwrite( full_depth_training_data_dir, this->_depth_image);
+			
+			this->_training_set_save_count = this->_training_set_save_count + 1;
+			
+			return;
+		}
 
 		
 		if(((this->_depth_count==1)&&(this->_rgb_count==1))||((testing_set_end==true)&&(skip_once==false)))

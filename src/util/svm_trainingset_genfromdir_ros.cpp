@@ -89,7 +89,8 @@ class SVM_TRAINING_ROS{
          ros::NodeHandle param_nh;
 	     ros::Rate* _loop_rate;
 		 
-		 std::string  _training_set_dir;
+		 std::string  _training_set_rgb_dir;
+		 std::string  _training_set_depth_dir;
 		 std::string  _training_set_rgb_image_list_file;
 		 std::string  _training_set_depth_image_list_file;
 		 
@@ -102,7 +103,14 @@ class SVM_TRAINING_ROS{
 		 cv::Mat _rgb_image;
 		 cv::Mat _depth_image;
 		 
+		 //std::ofstream  in;
 		 
+		 bool _depth_is_jpg_type = false;
+		 
+		 
+		 float _relative_depth_conv_weight;
+		 float _relative_depth_conv_bias;
+		  
 		 float _dscale;
 		 float _fx, _fy, _px, _py;
 		 
@@ -113,27 +121,56 @@ class SVM_TRAINING_ROS{
 		 bool _true_image_training = true; /*true : generate training set for true image,  false : generate training set for false image*/
 		 
 	public:
-	    
-		 void run();
-		 void read_rgb_depth_file_list();
-		 
-		 STAIR_DETEC_COST_FUNC* str_det_cost_func;
-		 
-		 /*constructor and destructor*/
+	    		 /*constructor and destructor*/
 	    SVM_TRAINING_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh);
 	    ~SVM_TRAINING_ROS();
+		
+		 void run();
+		 void Lin_depthconversion(cv::Mat& depth_tmp,cv::Mat& depth_out, float weight, float bias);
+		 void read_rgb_depth_file_list();
+		 
+		 STAIR_DETEC_COST_FUNC* str_det_cost_func_train;
+
+
 
 };
 
 SVM_TRAINING_ROS::SVM_TRAINING_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh):main_nh(m_nh),param_nh(p_nh)
 {     
-       
-	   this->_training_set_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/training";
-	   this->_training_set_rgb_image_list_file = "training_rgb_img_file_list.txt";
-	   this->_training_set_depth_image_list_file = "training_depth_img_file_list.txt";
+       bool depth_is_jpg_type = true;
 	   
-	   std::string full_dir_rgb_list = this->_training_set_dir +"/" +  this->_training_set_rgb_image_list_file ;
-	   std::string full_dir_depth_list = this->_training_set_dir +"/" +  this->_training_set_depth_image_list_file ;
+	   float relative_depth_conv_weight = -0.012;
+	   float relative_depth_conv_bias = 3.5;
+	   
+	   std::string training_set_rgb_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/ccny_training_new/gray_scale/rgb";
+	   std::string training_set_depth_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/ccny_training_new/gray_scale/depth";
+	   std::string training_set_rgb_image_list_file = "training_gray_rgb_img_file_list.txt";
+	   std::string training_set_depth_image_list_file = "training_gray_depth_img_file_list.txt";
+	   
+	   param_nh.getParam("training_set_rgb_dir",training_set_rgb_dir);
+	   param_nh.getParam("training_set_depth_dir",training_set_depth_dir);
+	 
+	   param_nh.getParam("training_set_rgb_image_list_file",training_set_rgb_image_list_file);
+	   param_nh.getParam("training_set_depth_image_list_file",training_set_depth_image_list_file);
+	   
+	   param_nh.getParam("depth_is_jpg_type",depth_is_jpg_type);
+	   
+	   param_nh.getParam("relative_depth_conv_weight",relative_depth_conv_weight);
+	   param_nh.getParam("relative_depth_conv_bias",relative_depth_conv_bias);
+	   
+	   this->_training_set_rgb_dir = training_set_rgb_dir;
+	   this->_training_set_depth_dir = training_set_depth_dir;
+	   this->_training_set_rgb_image_list_file = training_set_rgb_image_list_file;
+	   this->_training_set_depth_image_list_file = training_set_depth_image_list_file;
+	   
+	   this->_depth_is_jpg_type = depth_is_jpg_type;
+	   
+	   
+	   this->_relative_depth_conv_weight = relative_depth_conv_weight;
+	   this->_relative_depth_conv_bias = relative_depth_conv_bias;
+	   
+	   std::string full_dir_rgb_list = this->_training_set_rgb_dir +"/" +  this->_training_set_rgb_image_list_file ;
+	   std::string full_dir_depth_list = this->_training_set_depth_dir +"/" +  this->_training_set_depth_image_list_file ;
        
        try
 	   {
@@ -154,10 +191,11 @@ SVM_TRAINING_ROS::SVM_TRAINING_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh):m
 		
 	   int update_rate = 10;
 	   
-	   this->str_det_cost_func = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);
+	   this->str_det_cost_func_train = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);
 	   
 	   this->_loop_rate = new ros::Rate(update_rate);
-       
+        //in.open("training_set.txt");
+		//in<<"function_call_count /"<<"gradient, unit:m/m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x_avg_error, unit:m/"<<"center_point_x_pixel, unit: pixel/"<<"center_point_y_pixel, unit :pixel"<<std::endl ;
 
 }
 
@@ -165,8 +203,8 @@ SVM_TRAINING_ROS::~SVM_TRAINING_ROS()
 {   
     rgb_in.close();
 	depth_in.close();
-     
-	delete  this->str_det_cost_func;
+    // in.close();
+	delete  this->str_det_cost_func_train;
 	delete this->_loop_rate;
 
 }
@@ -208,8 +246,8 @@ void SVM_TRAINING_ROS::read_rgb_depth_file_list()
 	    std::getline(rgb_ss, stringBuffer_rgb);
 		std::getline(depth_ss, stringBuffer_depth);
 		
-	    this->_rgb_image_file = this->_training_set_dir + "/" + stringBuffer_rgb;
-	    this->_depth_image_file = this->_training_set_dir + "/" + stringBuffer_depth;
+	    this->_rgb_image_file = this->_training_set_rgb_dir + "/" + stringBuffer_rgb;
+	    this->_depth_image_file = this->_training_set_depth_dir + "/" + stringBuffer_depth;
 	 
 	    std::cout<<" this->_rgb_image_file :"<<  this->_rgb_image_file<<"\n"<<std::endl;
 	    std::cout<<" this->_depth_image_file :"<< this->_depth_image_file<<"\n"<<std::endl;
@@ -262,7 +300,26 @@ void SVM_TRAINING_ROS::run()
 		 {
 			 std::cout<<" this->_image_open_ok :"<< "\n"<<std::endl;
 			 this->_rgb_image = cv::imread(this->_rgb_image_file,cv::IMREAD_COLOR);
-			 this->_depth_image = cv::imread(this->_depth_image_file,cv::IMREAD_ANYDEPTH);
+			 
+			 if(this->_depth_is_jpg_type == true)
+			{
+				cv::Mat depth_tmp;
+				
+				depth_tmp = cv::imread(this->_depth_image_file,cv::IMREAD_GRAYSCALE);
+				
+				//depth_tmp = cv::imread("/home/kangneoung/stair_detection/src/stair_detection/depth_6.jpg",cv::IMREAD_GRAYSCALE);
+		
+				cv::Mat depth_converted(depth_tmp.rows,depth_tmp.cols,CV_32FC1);
+				
+				this->Lin_depthconversion(depth_tmp,depth_converted,this->_relative_depth_conv_weight,this->_relative_depth_conv_bias);
+				
+				this->_depth_image = depth_converted.clone();
+				
+			}
+			else
+			{
+			   this->_depth_image = cv::imread(this->_depth_image_file,cv::IMREAD_ANYDEPTH);
+			}
 			   	
 			 SelectedLine.initX = 0;
 			 SelectedLine.initY = 0;
@@ -303,12 +360,32 @@ void SVM_TRAINING_ROS::run()
              {
      
              }
-			 
+			 std::cout<<"debugn line mian 1 "<<" \n"<<std::endl;
 			 cv::destroyWindow("RGB Image line_confirm");
-			 
+			 std::cout<<"debugn line mian 2 "<<" \n"<<std::endl;
 			 if(this->_true_image_training)
-             {			   
-		         this->str_det_cost_func->cal_cost_wrapper_offline_image_true(this->_depth_image, avg_X, SelectedLine.initY, SelectedLine.actualY, this->_fx, this->_fy, this->_px, this->_py,  this->_dscale, 480, 848);
+             {		
+                 std::cout<<"debugn line mian 3 "<<" \n"<<std::endl;
+                  if(!this->_depth_image.empty())
+				  {    
+			           cv::Mat depth_img;
+			           unsigned short preproc_resize_height = 480; 
+					   unsigned short preproc_resize_width = 848;
+					   int x_pixel = avg_X;
+					   int y_start_pixel = SelectedLine.initY;
+					   int y_end_pixel = SelectedLine.actualY;
+					   
+					   float fx =  this->_fx;
+					   float fy =  this->_fy;
+					   float px = this->_px;
+					   float py =  this->_py;
+					   float  dscale = this->_dscale;
+					   
+					   depth_img = this->_depth_image.clone();
+					    
+		               this->str_det_cost_func_train->cal_cost_wrapper_offline_image_true(depth_img, x_pixel, y_start_pixel, y_end_pixel, fx, fy, px, py, dscale, preproc_resize_height, preproc_resize_width);  /**/
+				  }
+				 std::cout<<"debugn line mian 4 "<<" \n"<<std::endl;
 		     }
 		     else
 		     {
@@ -319,6 +396,28 @@ void SVM_TRAINING_ROS::run()
 	
 	 ros::spinOnce();
 	 this->_loop_rate->sleep();
+}
+
+
+void SVM_TRAINING_ROS::Lin_depthconversion(cv::Mat& depth_tmp,cv::Mat& depth_out, float weight, float bias)
+{
+	
+	 int i;
+	 int j;
+	 
+	 for(i=0;i<depth_tmp.rows;i++)
+	 {
+		 for(j=0;j<depth_tmp.cols;j++)
+			 {
+				 
+				 depth_out.at<float>(i,j) = weight*depth_tmp.at<uchar>(i,j) + bias;
+				 
+			 }
+		 
+		 
+	 }
+	
+	
 }
 
 
