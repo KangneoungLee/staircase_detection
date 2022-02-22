@@ -141,11 +141,14 @@ include_directories(
 add_library(stair_detec_pre_proc src/stair_detec_pre_proc.cpp)
 target_link_libraries(stair_detec_pre_proc ${OpenCV_LIBS} ${Boost_LIBRARIES})
 
-add_library(stair_detec_cost_func src/stair_detec_cost_func.cpp)
-target_link_libraries(stair_detec_cost_func ${OpenCV_LIBS} ${Boost_LIBRARIES})
+add_library(stair_detec_online_func src/stair_detec_online_func.cpp)
+target_link_libraries(stair_detec_online_func ${OpenCV_LIBS} ${Boost_LIBRARIES})
 
 add_library(stair_detec_only_rgb src/stair_detec_only_rgb.cpp)
 target_link_libraries(stair_detec_only_rgb ${OpenCV_LIBS} ${Boost_LIBRARIES})
+
+add_library(stair_detec_cost_func src/stair_detec_cost_func.cpp)
+target_link_libraries(stair_detec_cost_func ${OpenCV_LIBS} ${Boost_LIBRARIES})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -158,7 +161,7 @@ target_link_libraries(stair_detec_only_rgb ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # add_executable(${PROJECT_NAME}_node src/stair_detection_node.cpp)
 
 add_executable(stair_detection_ros src/stair_detection_ros.cpp)
-target_link_libraries(stair_detection_ros stair_detec_pre_proc stair_detec_cost_func stair_detec_only_rgb ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(stair_detection_ros stair_detec_pre_proc stair_detec_cost_func stair_detec_only_rgb stair_detec_online_func ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_dependencies(stair_detection_ros ${catkin_EXPORTED_TARGETS})
 
 add_executable(svm_training_ros src/util/svm_training_ros.cpp)

@@ -9,6 +9,8 @@
 #include "stair_detection/stair_detec_pre_proc.h"
 #include "stair_detection/stair_detec_cost_func.h"
 #include "stair_detection/stair_detec_only_rgb.h"
+#include "stair_detection/stair_detec_online_func.h"
+
 #include <stair_custom_msg/debug_msg_1.h>
 #include <stair_custom_msg/stairlocation.h>
 #include <stair_custom_msg/pixel_stairlocation.h>
@@ -109,6 +111,12 @@ class STAIR_DETECTION_ROS{
          float _rule_base_x_avg_error_th;		 
 		 int _noise_rm_pre_proc_index;
 		 bool _implementation_on_jetson;
+		 
+		 int _detection_count = 0;
+		 
+		 /*online learning*/
+		 bool _use_online_learning;
+	
 		
 		 std::vector<float> x_coor_cam_frame_vec;
 		 std::vector<float> y_coor_cam_frame_vec;
@@ -132,9 +140,15 @@ class STAIR_DETECTION_ROS{
 		 cv::Ptr<cv::ml::SVM> classifier;
 		 
 		  /*offline test variables*/
-		 std::string  _testing_set_dir;
+		 std::string  _testing_set_rgb_dir;
+		 std::string  _testing_set_depth_dir;
+		 std::string _result_save_dir;
 		 std::string  _testing_set_rgb_image_list_file;
 		 std::string  _testing_set_depth_image_list_file;
+		 bool _coordinate_transform_needed = false;
+		 bool _depth_is_jpg_type = false;
+		 float _relative_depth_conv_weight;
+		 float _relative_depth_conv_bias;
 		 
 		 std:: ifstream _rgb_in;
 		 std:: ifstream _depth_in;
@@ -148,10 +162,13 @@ class STAIR_DETECTION_ROS{
 		 bool _image_open_ok = false; 		  
 		 unsigned char _reading_status = 0;   /*0 : reading bad, 1 : reading (process), 2 : reading (success)*/
 		 
-		 std::string _result_save_dir;
+		 
 		 int image_read_count = 0;
 		 
 		 bool _stair_case_detc_flag = false;
+		 
+		 std::ofstream  _detected_data_write_roi_100;
+		 std::ofstream  _detected_data_write_roi_200;
 	
 	public:
 	
@@ -171,18 +188,31 @@ class STAIR_DETECTION_ROS{
 		
 		/*offline test function*/
 		void read_rgb_depth_file_list();
+		
+		void Lin_depthconversion(cv::Mat& depth_tmp,cv::Mat& depth_out, float weight, float bias);
 	 
 		/*constructor and destructor*/
 	    STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh);
 	    ~STAIR_DETECTION_ROS();
 	
 	    STAIR_DETEC_PRE_PROC* str_det_prprc;
-		 STAIR_DETEC_COST_FUNC* str_det_cost_func;
-		 STAIR_DETEC_ONLY_RGB* str_det_only_rgb;
+		STAIR_DETEC_COST_FUNC* str_det_cost_func;
+		STAIR_DETEC_ONLY_RGB* str_det_only_rgb;
+		
+		/*online learning*/
+		STAIR_DETEC_ONLINE_FUNC* str_det_online_func;
 };
 
 STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh):main_nh(m_nh),param_nh(p_nh),_it(m_nh),tfListener(tfBuffer)
 {
+	_detected_data_write_roi_100.open("detected_data_set_roi_100.txt");
+	
+	_detected_data_write_roi_100<<"gradient, unit:m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
+	
+	_detected_data_write_roi_200.open("detected_data_set_roi_200.txt");
+	
+	_detected_data_write_roi_200<<"gradient, unit:m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
+	 
 	int update_rate = 10;
 	
 	 std::string  rgb_image_topic = "front_cam/camera/color/image_raw";
@@ -211,6 +241,8 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 bool offline_performance_test = false;  /*using image data set to test the logic */
 	 bool use_only_rgb_to_detect_staircase = false;  /*detecting staircase only using the pixel coordinate, not using the depth value */
 	 bool implementation_on_jetson = false;  /*detecting staircase only using the pixel coordinate, not using the depth value */
+	  bool coordinate_transform_needed= false; /*071921 human view test*/
+	  bool depth_is_jpg_type = false;
 	 int preproc_resize_height = 480;
 	 int preproc_resize_width = 848;
 	 int canny_lt =25;
@@ -242,9 +274,13 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 float rule_base_depth_y_error_th_min=0.2;
 	 int noise_rm_pre_proc_index = 1;   /* 0 : no dilate, erode 1: diate 2 : erode*/
 	 
+	  float relative_depth_conv_weight = -0.012;
+	  float relative_depth_conv_bias = 3.5;
+	 
 	 std::string camera_frame_id = "camera_aligned_depth_to_color_frame";
 	 
-	 std::string testing_set_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair";
+	 std::string testing_set_rgb_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair/rgb";
+	 std::string testing_set_depth_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair/depth";
 	 std::string result_save_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair_result";
 	 std::string testing_set_rgb_image_list_file = "test_rgb_img_file_list.txt";
 	 std::string testing_set_depth_image_list_file = "test_depth_img_file_list.txt";
@@ -287,12 +323,19 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 param_nh.getParam("noise_rm_pre_proc_index",noise_rm_pre_proc_index);
 	 param_nh.getParam("implementation_on_jetson",implementation_on_jetson);
 	 
+	 
 	 /*offline image set test param*/
 	 param_nh.getParam("offline_performance_test",offline_performance_test); /*using image data set to test the logic */
-	 param_nh.getParam("testing_set_dir",testing_set_dir);
+	 param_nh.getParam("testing_set_rgb_dir",testing_set_rgb_dir);
+	 param_nh.getParam("testing_set_depth_dir",testing_set_depth_dir);
 	 param_nh.getParam("result_save_dir",result_save_dir);
 	 param_nh.getParam("testing_set_rgb_image_list_file",testing_set_rgb_image_list_file);
 	 param_nh.getParam("testing_set_depth_image_list_file",testing_set_depth_image_list_file);
+	 param_nh.getParam("coordinate_transform_needed",coordinate_transform_needed);
+	 param_nh.getParam("relative_depth_conv_weight",relative_depth_conv_weight);
+	 param_nh.getParam("relative_depth_conv_bias",relative_depth_conv_bias);
+	 param_nh.getParam("depth_is_jpg_type",depth_is_jpg_type);
+	 
      
 	 this->_update_rate = update_rate;
 	 this->_encoding_rgb_flag = encoding_rgb_flag;
@@ -340,15 +383,26 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 if(this->_offline_performance_test == true)
 	 {	
 	     this->_result_save_dir = result_save_dir;
-	     this->_testing_set_dir = testing_set_dir;
+	     this->_testing_set_rgb_dir = testing_set_rgb_dir;
+		 this->_testing_set_depth_dir = testing_set_depth_dir;
 	     this->_testing_set_rgb_image_list_file = testing_set_rgb_image_list_file;
 	     this->_testing_set_depth_image_list_file = testing_set_depth_image_list_file;
+		 this->_coordinate_transform_needed = coordinate_transform_needed;
+		 this->_relative_depth_conv_weight = relative_depth_conv_weight;
+		 this->_relative_depth_conv_bias = relative_depth_conv_bias;
+		 this->_depth_is_jpg_type = depth_is_jpg_type;
 	   
-	     std::string full_dir_rgb_list = this->_testing_set_dir +"/" +  this->_testing_set_rgb_image_list_file ;
-	     std::string full_dir_depth_list = this->_testing_set_dir +"/" +  this->_testing_set_depth_image_list_file ;
-         std::string full_dir_rgb_list_filtered = this->_testing_set_dir +"/" + "test_rgb_img_file_list_filtered.txt";
-		 std::string full_dir_depth_list_filtered = this->_testing_set_dir +"/" + "test_depth_img_file_list_filtered.txt";
+	     std::string full_dir_rgb_list = this->_testing_set_rgb_dir +"/" +  this->_testing_set_rgb_image_list_file ;
+	     std::string full_dir_depth_list = this->_testing_set_depth_dir +"/" +  this->_testing_set_depth_image_list_file ;
+         std::string full_dir_rgb_list_filtered = this->_testing_set_rgb_dir +"/" + "test_rgb_img_file_list_filtered.txt";
+		 std::string full_dir_depth_list_filtered = this->_testing_set_depth_dir +"/" + "test_depth_img_file_list_filtered.txt";
 		 std::string full_dir_not_detected_list = this->_result_save_dir + "/" + "not_detected_image_list.txt";
+		 
+		 
+		 /*online learning param*/
+		  bool use_online_learning = false;
+		  param_nh.getParam("use_online_learning",use_online_learning);
+		  this->_use_online_learning = use_online_learning;
 		 
          try
 	     {
@@ -372,9 +426,9 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 }
 	 else
 	 { 
-	    this->_rgb_sub =  _it.subscribe(rgb_image_topic, 1,boost::bind(&STAIR_DETECTION_ROS::rgb_image_callback,this,_1,0));
-	    this->_depth_sub =  _it.subscribe(depth_image_topic, 1, boost::bind(&STAIR_DETECTION_ROS::depth_image_callback,this,_1,0));
-	    this->_rgb_roi_pub =  _it.advertise("camera/color/stair_case_roi", 1);
+	    this->_rgb_sub =  _it.subscribe(rgb_image_topic, 1,boost::bind(&STAIR_DETECTION_ROS::rgb_image_callback,this,_1,1));
+	    this->_depth_sub =  _it.subscribe(depth_image_topic, 1, boost::bind(&STAIR_DETECTION_ROS::depth_image_callback,this,_1,1));
+	    this->_rgb_roi_pub =  _it.advertise("camera/color/stair_dect_roi", 1);
 	 
 	    this->_rgb_cam_info_sub = main_nh.subscribe<sensor_msgs::CameraInfo>(camera_rgb_info_topic, 1, boost::bind(&STAIR_DETECTION_ROS::rgb_cam_info_callback, this,_1,0));
 	    this->_depth_cam_info_sub = main_nh.subscribe<sensor_msgs::CameraInfo>(camera_depth_info_topic, 1, boost::bind(&STAIR_DETECTION_ROS::depth_cam_info_callback, this,_1,0));
@@ -391,6 +445,12 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 
      this->str_det_prprc = new STAIR_DETEC_PRE_PROC();
 	 this->str_det_cost_func = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);
+	 
+	 if(this->_use_online_learning == true)
+	 {
+		 this->str_det_online_func = new STAIR_DETEC_ONLINE_FUNC(param_nh);
+	 }
+	 
      this->_loop_rate = new ros::Rate(update_rate);	
 	 
 	 if(this->_use_svm_classifier == true)
@@ -408,12 +468,20 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 
 STAIR_DETECTION_ROS::~STAIR_DETECTION_ROS()
 {
+	
+	_detected_data_write_roi_100.close();
+	_detected_data_write_roi_200.close();
+	
 	 //_rgb_text_filter_in.close(); /*text filtering*/
 	 //_depth_text_filter_in.close(); /*text filtering*/
 	 _not_detected_list.close();
 	
     delete this->str_det_prprc;
 	delete this->str_det_cost_func;
+	if(this->_use_online_learning == true)
+	{
+	   delete this->str_det_online_func;
+	}
 	delete this->_loop_rate;
 }
 
@@ -457,8 +525,8 @@ void STAIR_DETECTION_ROS::read_rgb_depth_file_list()
 
 		this->_rgb_image_file = stringBuffer_rgb;//"image.png"; //
 		this->_depth_image_file = stringBuffer_depth;//"image_dummy_depth.png"; //
-	    this->_rgb_image_file_full_path = this->_testing_set_dir + "/" + this->_rgb_image_file;
-	    this->_depth_image_file_full_path = this->_testing_set_dir + "/" + this->_depth_image_file;
+	    this->_rgb_image_file_full_path = this->_testing_set_rgb_dir + "/" + this->_rgb_image_file;
+	    this->_depth_image_file_full_path = this->_testing_set_depth_dir + "/" + this->_depth_image_file;
 	 
 	    std::cout<<" this->_rgb_image_file_full_path :"<<  this->_rgb_image_file_full_path<<"\n"<<std::endl;
 	    std::cout<<" this->_depth_image_file_full_path :"<< this->_depth_image_file_full_path<<"\n"<<std::endl;
@@ -650,9 +718,9 @@ void STAIR_DETECTION_ROS::pre_proc_run()
        cv::Mat resized_rgb_image_main; 	   
 	   
 	   int while_count = 0;
-	   int while_count_th =5;
+	   int while_count_th =1;
 	 
-     //std::cout<<"_offline_performance_test : "<<this->_offline_performance_test<<"\n"<<std::endl;	 
+     std::cout<<"_offline_performance_test : "<<this->_offline_performance_test<<"\n"<<std::endl;	 
 	 //std::cout<<"_use_only_rgb_to_detect_staircase : "<<this->_use_only_rgb_to_detect_staircase<<"\n"<<std::endl;
 	   
 	 if(this->_offline_performance_test == true)
@@ -661,16 +729,45 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 	    {
             this->read_rgb_depth_file_list();
 	    }
-		   
+		 
+		//this->_image_open_ok = true;
+		 
 		if(this->_image_open_ok == true)
 		{
 			img_ok_count = img_ok_count +1;
-			this->_rgb_image = cv::imread(this->_rgb_image_file_full_path,cv::IMREAD_COLOR);
-			this->_depth_image = cv::imread(this->_depth_image_file_full_path,cv::IMREAD_ANYDEPTH);
+            this->_rgb_image = cv::imread(this->_rgb_image_file_full_path,cv::IMREAD_COLOR);
+			
+			//this->_rgb_image = cv::imread("/home/kangneoung/stair_detection/src/stair_detection/rgb_6.jpg",cv::IMREAD_COLOR);
+			
+			if(this->_depth_is_jpg_type == true)
+			{
+				cv::Mat depth_tmp;
+				
+				depth_tmp = cv::imread(this->_depth_image_file_full_path,cv::IMREAD_GRAYSCALE);
+				
+				//depth_tmp = cv::imread("/home/kangneoung/stair_detection/src/stair_detection/depth_6.jpg",cv::IMREAD_GRAYSCALE);
+		
+				cv::Mat depth_converted(depth_tmp.rows,depth_tmp.cols,CV_32FC1);
+				
+				this->Lin_depthconversion(depth_tmp,depth_converted,this->_relative_depth_conv_weight,this->_relative_depth_conv_bias);
+				
+				this->_depth_image = depth_converted.clone();
+				
+			}
+			else
+			{
+			   this->_depth_image = cv::imread(this->_depth_image_file_full_path,cv::IMREAD_ANYDEPTH);
+			}
 		}	
 	 }
 	 
 	//std::cout<<"this->_image_open_ok  : "<<this->_image_open_ok <<"\n"<<std::endl;	 
+	
+	bool single_image_read_for_rgb = false;
+	if(single_image_read_for_rgb ==true)
+	{
+	   this->_rgb_image = cv::imread("/home/kangneoung/stair_detection/src/stair_detection/IMG_012011-9.jpg",cv::IMREAD_COLOR);
+	}
 	
 	 if(this->_image_open_ok == false)
 	 {
@@ -752,12 +849,23 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 		 {
 	        if(!_depth_image.empty())
 	        {
-		           this->str_det_cost_func->cal_cost_wrapper(resized_rgb_image_main, this->_depth_image,roi_center_point_out_main,midp_of_all_lines_main,vector_set_for_learning_main,this->_fx,this->_fy,this->_px,this->_py,this->_dscale,this->_min_numof_lines_4_cluster, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width);
+				    			           unsigned short preproc_resize_height = 480; 
+					   unsigned short preproc_resize_width = 848;
+					   int x_pixel = 300;
+					   int y_start_pixel = 100;
+					   int y_end_pixel = 300;
+				    //this->str_det_cost_func->cal_cost_wrapper_offline_image_true(this->_depth_image, x_pixel, y_start_pixel, y_end_pixel, this->_fx, this->_fy, this->_px, this->_py,  this->_dscale, preproc_resize_height, preproc_resize_width);  /**/
+		           this->str_det_cost_func->cal_cost_wrapper(resized_rgb_image_main, this->_depth_image,roi_center_point_out_main,midp_of_all_lines_main,vector_set_for_learning_main,this->_fx,this->_fy,this->_px,this->_py,this->_dscale,this->_min_numof_lines_4_cluster, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width, this->_coordinate_transform_needed);
 	        }
 	
 	        if(!resized_gray_image_main.empty())
             {
-	           if(this->_use_svm_classifier == true)
+				
+			   if(this->_use_online_learning == true)
+			   {
+				   this->str_det_online_func->rule_base_detect(resized_rgb_image_main, vector_set_for_learning_main);
+			   }
+	           else if(this->_use_svm_classifier == true)
 	           {
 		           this->stair_case_detc_svm(resized_rgb_image_main, vector_set_for_learning_main);	
 	            }
@@ -776,6 +884,16 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 	 if((this->_image_open_ok == true)&&(this->_stair_case_detc_flag == false))
 	 {
 		 _not_detected_list<<this->_rgb_image_file<<std::endl;
+		 
+		 std::vector<std::vector<float>>::iterator it;
+		 
+		 
+		 //for(it=vector_set_for_learning_main->begin(); it!=vector_set_for_learning_main->end(); it++)
+	     //{  
+	   
+		   //_not_detected_list<<"gradient"<<it->at(0)<<"gradient diff:   "<<it->at(1)<<"depth_y_error:   "<<(it->at(2))*10<<std::endl;
+		
+	     //}
 	 }
 	 
 	//std::cout<<"img_ok_count : "<<img_ok_count<<"\n"<<std::endl;
@@ -803,6 +921,7 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 	float z_coor_cam_frame_tmp;
 	float x_center_pixel;
 	float y_center_pixel;
+	float roi_size;
 	
 	float gradient_diff_th_interp;
 	float rule_base_depth_y_error_th_interp;
@@ -888,6 +1007,7 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			z_coor_cam_frame_tmp = it->at(6);
 			x_center_pixel = it->at(7);
 			y_center_pixel = it->at(8);
+			roi_size = it ->at(9);
 			
 			this->x_coor_cam_frame_vec.push_back(x_coor_cam_frame_tmp);
 			this->y_coor_cam_frame_vec.push_back(y_coor_cam_frame_tmp);
@@ -910,6 +1030,15 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			 this->debug_gradient_diff.push_back(gradient_diff);
 			 this->debug_depth_y_error.push_back(depth_y_error);
 			
+             if(roi_size <101)
+			 {
+		 	    _detected_data_write_roi_100<<gradient<<" "<<gradient_diff<<" "<<depth_y_error<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
+			 }
+			 else
+			 {
+			    _detected_data_write_roi_200<<gradient<<" "<<gradient_diff<<" "<<depth_y_error<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
+			 }
+			
 			//break;
 		}
 		else
@@ -917,32 +1046,10 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			stair_case_detc_flag = false;
 		}
 		
-	   if(stair_case_detc_flag==true)
-	   {
-			cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
-			
-			rectangle_tmp1_pt1.x =x_center_pixel-30;
-		    rectangle_tmp1_pt1.y =y_center_pixel+30;
-		
-		    rectangle_tmp1_pt2.x =x_center_pixel+30;
-		    rectangle_tmp1_pt2.y =y_center_pixel-30;
-			
-			 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			 
-			 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-			 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	   }
+	 //  if(stair_case_detc_flag==true)
+	 //  {
 
-		i++;
-	}
-	
-	//std::cout<<"gradient_condition_ok : "<<gradient_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"depth_y_error_condition_ok : "<<depth_y_error_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"avg_x_error_condition_ok : "<<avg_x_error_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"stair_case_detc_flag : "<<stair_case_detc_flag<<"\n"<<std::endl;
-	
-	//if(stair_case_detc_flag==true)
-	//{
+		   
 	//		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
 			
 	//		rectangle_tmp1_pt1.x =x_center_pixel-30;
@@ -955,8 +1062,39 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			 
 	//		 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
 	//		 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//}
+	 //  }
 
+		i++;
+	}
+	
+
+	//std::cout<<"gradient_condition_ok : "<<gradient_condition_ok<<"\n"<<std::endl;
+	//std::cout<<"depth_y_error_condition_ok : "<<depth_y_error_condition_ok<<"\n"<<std::endl;
+	//std::cout<<"avg_x_error_condition_ok : "<<avg_x_error_condition_ok<<"\n"<<std::endl;
+	//std::cout<<"stair_case_detc_flag : "<<stair_case_detc_flag<<"\n"<<std::endl;
+	
+	if(stair_case_detc_flag==true)
+	{
+			this->_detection_count = this->_detection_count + 1;
+            
+			
+		
+		
+			cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
+			
+			rectangle_tmp1_pt1.x =x_center_pixel-30;
+		    rectangle_tmp1_pt1.y =y_center_pixel+30;
+		
+		    rectangle_tmp1_pt2.x =x_center_pixel+30;
+		    rectangle_tmp1_pt2.y =y_center_pixel-30;
+			
+			 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
+			  
+			 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
+			 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
+	}
+
+	std::cout<<"detection count " <<this->_detection_count<<std::endl;
 	
 	this->_stair_case_output_image=rgb_input.clone();
 	
@@ -1152,7 +1290,26 @@ void STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vec
 	
 }
 
-
+void STAIR_DETECTION_ROS::Lin_depthconversion(cv::Mat& depth_tmp,cv::Mat& depth_out, float weight, float bias)
+{
+	
+	 int i;
+	 int j;
+	 
+	 for(i=0;i<depth_tmp.rows;i++)
+	 {
+		 for(j=0;j<depth_tmp.cols;j++)
+			 {
+				 
+				 depth_out.at<float>(i,j) = weight*depth_tmp.at<uchar>(i,j) + bias;
+				 
+			 }
+		 
+		 
+	 }
+	
+	
+}
 
 
 void STAIR_DETECTION_ROS::stair_case_detc_rgb_only(const cv::Mat& rgb_input, int final_center_point_col,int final_center_point_row)
@@ -1231,14 +1388,22 @@ void STAIR_DETECTION_ROS::run()
 {  
     while(ros::ok())
 	{
-		if((this->_MB_flag_status !=2)&&(this->_detec_trigger_flag == 1))
-		{  
-		   this->pre_proc_run();
-	   
-	       sensor_msgs::ImagePtr rgb_roi_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->_stair_case_output_image).toImageMsg();
-	   
-	       this->_rgb_roi_pub.publish(rgb_roi_msg);
+		if(this->_offline_performance_test == true)
+		{
+			this->pre_proc_run();
 		}
+		else
+		{
+		    if((this->_MB_flag_status !=2)&&(this->_detec_trigger_flag == 1))
+		   {  
+		      this->pre_proc_run();
+	   
+	          sensor_msgs::ImagePtr rgb_roi_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->_stair_case_output_image).toImageMsg();
+	   
+	          this->_rgb_roi_pub.publish(rgb_roi_msg);
+		   }	
+		}
+		
 	   //ros::spin();
 	   ros::spinOnce();
 	   this->_loop_rate->sleep();

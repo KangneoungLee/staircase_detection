@@ -10,10 +10,10 @@
           <param name="update_rate"            value="3"/>
           <param name="offline_svm_training"        value="false"/>
           <param name="use_svm_classifier"        value="false"/>
-          <param name="rgb_image_topic"      value="front_cam/camera/color/image_raw"/>
-          <param name="depth_image_topic"      value="front_cam/camera/depth/image_rect_raw"/>
-          <param name="camera_rgb_info_topic"      value="front_cam/camera/color/camera_info"/>
-          <param name="camera_depth_info_topic"    value="front_cam/camera/depth/camera_info"/>
+          <param name="rgb_image_topic"      value="camera/rgb/image_raw"/>
+          <param name="depth_image_topic"      value="camera/depth/image_rect_raw"/>
+          <param name="camera_rgb_info_topic"      value="camera/rgb/camera_info"/>
+          <param name="camera_depth_info_topic"    value="camera/depth/camera_info"/>
           <param name="camera_stair_pose_topic"    value="front_cam/camera/stair_pose"/>
           <param name="camera_frame_id"    value="camera_aligned_depth_to_color_frame"/>
 
@@ -26,7 +26,7 @@
           <param name="hough_transform_threshold"          value="75"/>
           <param name="hough_transform_minumum_line_length"        value="40"/>
           <param name="hough_transform_maximum_line_point_gap"        value="5"/>
-          <param name="noise_rm_pre_proc_index"        value="1"/>
+          <param name="noise_rm_pre_proc_index"        value="1"/>   <!-- 1 : dilation  2: eroding  3: no processing-->
 
 <!-- set of ROI param -->
           <param name="minimum_number_of_lines_for_clustering"        value="3"/>
@@ -36,30 +36,31 @@
           <param name="stair_gradient_minimum_threshold"        value="0.35"/>
 
           <param name="rule_base_grad_diff_th_y3"        value="0.4"/>
-          <param name="rule_base_grad_diff_th_y2"        value="0.35"/>
+          <param name="rule_base_grad_diff_th_y2"        value="0.3"/>
           <param name="rule_base_grad_diff_th_y1"          value="0.12"/>
           <param name="rule_base_grad_diff_th_x3"        value="1.7"/>
           <param name="rule_base_grad_diff_th_x2"        value="0.8"/>
           <param name="rule_base_grad_diff_th_x1"        value="0.3"/>
 
-          <param name="rule_base_depth_y_error_th_y3"        value="4"/>
-          <param name="rule_base_depth_y_error_th_y2"        value="3"/>
+          <param name="rule_base_depth_y_error_th_y3"        value="3.5"/>
+          <param name="rule_base_depth_y_error_th_y2"        value="2.5"/>
           <param name="rule_base_depth_y_error_th_y1"          value="1.2"/>
           <param name="rule_base_depth_y_error_th_x3"        value="1.7"/>
           <param name="rule_base_depth_y_error_th_x2"        value="0.9"/>
           <param name="rule_base_depth_y_error_th_x1"        value="0.3"/>
 
 
-          <param name="implementation_on_jetson"    value="implementation_on_jetson"/>
+          <param name="implementation_on_jetson"    value="false"/>
 
 <!-- staircase detection only using rgb -->
           <param name="use_only_rgb_to_detect_staircase"        value="false"/>
           <param name="min_numof_lines_4_cluster_rgb_only"        value="6"/>
 
 <!-- offline test result parameter set -->
-          <param name="offline_performance_test"        value="false"/>
-          <param name="testing_set_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/false/no_stair"/>
-          <param name="result_save_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/false/no_stair_result"/>
+          <param name="offline_performance_test"        value="true"/>
+          <param name="testing_set_rgb_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/stair_case_tamu_art_lab/testing/false/no_stair"/>
+          <param name="testing_set_depth_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/stair_case_tamu_art_lab/testing/false/no_stair"/>
+          <param name="result_save_dir"        value="/home/kangneoung/stair_detection/src/stair_detection/image_set/stair_case_tamu_art_lab/testing/false/no_stair_result"/>
           <param name="testing_set_rgb_image_list_file"        value="test_rgb_img_file_list_filtered.txt"/>
           <param name="testing_set_depth_image_list_file"        value="test_depth_img_file_list_filtered.txt"/>
        
