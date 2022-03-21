@@ -3,19 +3,27 @@
 int function_call_count = 0;
 
 /*constructor and destructor*/
-STAIR_DETEC_COST_FUNC::STAIR_DETEC_COST_FUNC(bool svm_oft_flag):svm_offline_training_flag(svm_oft_flag)
+STAIR_DETEC_COST_FUNC::STAIR_DETEC_COST_FUNC(bool svm_oft_flag, bool coor_trans_flag):_svm_offline_training_flag(svm_oft_flag), _coor_trans_flag(coor_trans_flag)
 {
-	if(svm_offline_training_flag == true)
+	if(this->_svm_offline_training_flag == true)
 	{
 		in.open("training_set.txt");
 		in<<"function_call_count /"<<"gradient, unit:m/m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x_avg_error, unit:m/"<<"center_point_x_pixel, unit: pixel/"<<"center_point_y_pixel, unit :pixel"<<std::endl ;
 	}
 	
+	this->_small_roi_depth_th1 = 6;
+	this->_small_roi_depth_th2 = 3;
+	this->_small_roi_y_th_low = 1.5;
+	this->_small_roi_y_th_high = 3;
+	this->_invaild_depth_th = 9;
+	this->_invail_depth_count_th =1000;
+	
+	
 }
 
 STAIR_DETEC_COST_FUNC::~STAIR_DETEC_COST_FUNC()
 {
-	if(svm_offline_training_flag == true)
+	if(this->_svm_offline_training_flag == true)
 	{
 		in.close();
 	}
@@ -29,10 +37,19 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 	 int invail_depth_count_th =1000;
 	 
      cv::Mat resized_depth_img_tmp, resized_depth_img_tmp_32f; 
-	 
+	 std::cout<<"cal_cost_offline_image_true 1 "<<" \n"<<std::endl;
 	 cv::resize(depth_img, resized_depth_img_tmp, cv::Size(preproc_resize_width,preproc_resize_height), cv::INTER_AREA);  /*resize image to reduce computation cost */
 	 
-	 if(resized_depth_img_tmp.type() == CV_16UC1) resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
+	 if(resized_depth_img_tmp.type() == CV_16UC1)
+	 {		 
+         resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
+	 }
+	 else
+	 {
+	    resized_depth_img_tmp_32f = resized_depth_img_tmp.clone();
+	 }
+	 
+	 std::cout<<"cal_cost_offline_image_true 2 "<<" \n"<<std::endl;
 	 
 	 int center_point_col = std::round(x_pixel);
 	 int center_point_row = std::round((y_start_pixel+y_end_pixel)/2);
@@ -66,7 +83,8 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 	  
 	 for (starting_point_y=y_start_pixel; starting_point_y<y_end_pixel;starting_point_y=starting_point_y+interval)
 	 {
-		 			    
+		 //std::cout<<"img width : "<<resized_depth_img_tmp_32f.cols<<"img height : "<<resized_depth_img_tmp_32f.rows<<" \n"<<std::endl;		
+		// std::cout<<"cal_cost_offline_image_true : starting_point_y : "<<starting_point_y<<"center_point_col : "<<center_point_col<<" \n"<<std::endl;				    
 		  float depth_tmp2 =  resized_depth_img_tmp_32f.at<float>(starting_point_y,center_point_col);
 		  
 		  if(depth_tmp2>invaild_depth_th)
@@ -94,6 +112,8 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 			 n++;
 						   
 		 }
+		 
+		 if (n>=99) break;
 	 }
 	 
 	 cv::Mat  array_x_coor_final = array_x_coor.clone();
@@ -103,11 +123,35 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 	 float avg_depth_y_error_out;
 	 float x_avg_error_out;
 	 float gradient_sub_diff;
-	 
+	 std::cout<<"debugn line1 "<<" \n"<<std::endl;
 	 this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
 	 
+	if(gradient_out>5)
+	{
+	    gradient_out =5;
+	}
+	else if(gradient_out < -5)
+	{
+		gradient_out =-5;
+	}
+						
+	if(gradient_sub_diff>5)
+	{
+		gradient_sub_diff =5;
+	}
+	else if(gradient_sub_diff < -5)
+	{
+		gradient_sub_diff =-5;
+	}
+						
+						
+	if(avg_depth_y_error_out>1)
+	{
+		avg_depth_y_error_out =1;
+	}
 	 
-	 in<<function_call_count<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_col<<"/"<<center_point_row<<"/"<<label<<"/"<<depth_center<<std::endl;
+	 std::cout<<"debugn line2 "<<" \n"<<std::endl;
+	 in<<0<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_col<<"/"<<center_point_row<<"/"<<label<<"/"<<depth_center<<std::endl;
 
 
 }	
@@ -117,61 +161,41 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
                                                                                                 int min_numof_lines_4_cluster,  int predefined_roi_height, int predefined_roi_width, unsigned short preproc_resize_height, unsigned short preproc_resize_width)
 																								
 {
-	cv::Mat resized_depth_img_tmp, resized_depth_img_tmp_32f; 
+   cv::Mat resized_depth_img_tmp, resized_depth_img_tmp_32f; 
 	
 
-	cv::resize(depth_img, resized_depth_img_tmp, cv::Size(preproc_resize_width,preproc_resize_height), cv::INTER_AREA);  /*resize image to reduce computation cost */
+   cv::resize(depth_img, resized_depth_img_tmp, cv::Size(preproc_resize_width,preproc_resize_height), cv::INTER_AREA);  /*resize image to reduce computation cost */
 	
-	if(resized_depth_img_tmp.type() == CV_16UC1)
-	{
-		resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
-	}
-	else if(resized_depth_img_tmp.type() == CV_32F)
-	{
-		resized_depth_img_tmp_32f = resized_depth_img_tmp.clone();
-	}
-	
+   if(resized_depth_img_tmp.type() == CV_16UC1)   resized_depth_img_tmp.convertTo(resized_depth_img_tmp_32f, CV_32F, dscale);
+   else if(resized_depth_img_tmp.type() == CV_32F)   resized_depth_img_tmp_32f = resized_depth_img_tmp.clone();
 
-	 double t;
-     if(time_debug_flag == true) t = (double)cv::getTickCount();
+   double t;
+   if(time_debug_flag == true) t = (double)cv::getTickCount();
 	
-	float small_roi_depth_th1 =6;
-	float small_roi_depth_th2 =3;
-	float small_roi_y_th_low = 1.5;
-	float small_roi_y_th_high = 3;
-	float invaild_depth_th = 9;
-	int invail_depth_count_th =1000;
-
-   int num_roi_height_resize = 2;
+   int num_roi_size = 2;
    
    int height_denominator[2] ={2,4};
    int height_upper_offset[2]={0,0};
    
    int num_center_width_offset = 3;
+   int num_center_height_offset = 3;
    
-   int width_offset[3]={0,25,-25};
+   int width_offset_ary[3]={0,25,-25};
+   int height_offset_ary[3] = {0, -15, 15};
+
    
    bool y_coor_and_depth_fail_for_small_roi = false;
    
    int i;
-   int roi_size_index;
-  
    for( i = 0; i <  roi_center_point_out.rows; i++)
    { 
-      
-	  int count = 0;
+	  
 	  cv::Mat array_x_coor = cv::Mat::zeros(100, 1, CV_32F);    /* this array is for x (camera frame) */
-	  
-	  
+	 
 	  /*if K_mean_cluster algortihm doesn't find suitable center position, it returns meaningless vlaue. Therefore, the invaild center position should be filtered out*/
-	  if((roi_center_point_out.at<cv::Vec2f>(i)[0] <= 0)||(roi_center_point_out.at<cv::Vec2f>(i)[0] >= preproc_resize_width))
-	  {
-		    continue;
-	   }
-	  else if(( roi_center_point_out.at<cv::Vec2f>(i)[1]<=0)||(roi_center_point_out.at<cv::Vec2f>(i)[1]>=preproc_resize_height))
-	   {
-		    continue;
-	   }
+	  if((roi_center_point_out.at<cv::Vec2f>(i)[0] <= 0)||(roi_center_point_out.at<cv::Vec2f>(i)[0] >= preproc_resize_width))   continue;
+      else if(( roi_center_point_out.at<cv::Vec2f>(i)[1]<=0)||(roi_center_point_out.at<cv::Vec2f>(i)[1]>=preproc_resize_height))   continue;
+
 
 	   float center_point_x  = roi_center_point_out.at<cv::Vec2f>(i)[0];   /*pixel coordinate*/
 	   float center_point_y = roi_center_point_out.at<cv::Vec2f>(i)[1];   /*pixel coordinate*/
@@ -188,84 +212,6 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 	   float depth_center =  resized_depth_img_tmp_32f.at<float>(center_point_row,center_point_col);
 	 //  float y_world_coor_center = (py - center_point_y)/fy*depth_center;  
 
-		  
-	 // float y_world_coor_cp = 0;
-	  
-	  /* center point y offset calculation */
-	//  if((depth_center<6)&&(depth_center>1))
-	//  {
-	//	   float upper_limit_temp =  center_point_y + predefined_roi_height/2;
-	//	   float lower_limit_temp =  center_point_y - predefined_roi_height/2;
-		   
-		   
-	//	   if(upper_limit_temp<0)
-	//	  {
-	//	     upper_limit_temp = 0;
-	//	  }
-	//	  else if(upper_limit_temp>preproc_resize_height)
-	//	  {
-	//		 upper_limit_temp =  preproc_resize_height;
-	//	  }
-          
-    //      if(lower_limit_temp<0)
-	//	  {
-	//	     lower_limit_temp = 0;
-	//	  }
-	//	  else if(lower_limit_temp>preproc_resize_height)
-	//	  {
-	//		 lower_limit_temp =  preproc_resize_height;
-	//	  }	
-		   
-
-	//	   float depth_upper =  resized_depth_img_tmp_32f.at<float>(upper_limit_temp,center_point_col);
-	//	    float depth_lower =  resized_depth_img_tmp_32f.at<float>(lower_limit_temp,center_point_col);
-		   
-		  
-	//	   float y_world_coor_up = (py - upper_limit_temp)/fy*depth_upper;
-	//	   float y_world_coor_lo = (py - lower_limit_temp)/fy*depth_lower;
-		   
-	//	   int point_loop;
-		   
-	//	   float depth_sum_offset = 0;
-	//	   int count_offset = 0;
-		   
-	//	   for(point_loop = (lower_limit_temp+20); point_loop<(upper_limit_temp-20);point_loop=point_loop+10)
-	//	   {
-	//		   float depth_temp_offset = resized_depth_img_tmp_32f.at<float>(point_loop,center_point_col);
-			   
-	//		   if(depth_temp_offset > 1)
-	//		   {
-	//			   depth_sum_offset = depth_sum_offset + depth_temp_offset;
-	//			   count_offset = count_offset +1 ;
-	//		   }
-	//	   }
-		   
-	//	   float depth_avg_offset;
-		   
-	//	   if(count_offset>2)
-	//	   {
-	//	        depth_avg_offset = depth_sum_offset/count_offset;
-	//	   }
-	//	   else
-	//	   {
-	//		   depth_avg_offset = 0;
-	//	   }
-		   
-	//	   if((y_world_coor_lo>0)&&(depth_avg_offset>0))
-	//	   {
-	//		   int y_pixel_cp = std::round(py - y_world_coor_cp*fy/depth_avg_offset);
-			   //int y_pixel_offset = std::round((y_pixel_cp -y_world_coor_center)*1);
-			   
-			   /*after calculating y pixel offset, overwrite center_point_y, cneter_point_row, depth_center */
-	//		   center_point_y = std::round(y_pixel_cp*0.5 + center_point_y*0.5);
-	//		   center_point_row = center_point_y;
-			   
-	//		   depth_center =  resized_depth_img_tmp_32f.at<float>(center_point_row,center_point_col);
-			   
-	//		   std::cout<<"y_pixel_cp : "<< y_pixel_cp<<" \n"<<std::endl;
-	//	   }
-		  
-	// }
 	
 	  
 	  if(depth_center>0.1)
@@ -279,7 +225,7 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		   center_point_y_coor = 0;
 	   }
 	  
-	   if(0/*visualize_flag==2*/)
+	   if(0/*visualize_flag==2*/)  /*this code is for visualization */
 	   {
 		   cv::Point2i temp_point;
 		   
@@ -290,23 +236,22 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		   {
 			   cv::circle( rgb_input, temp_point, 10, cv::Scalar(  255,   0,   255), 2/*thickness*/ );   
 		   }
-		   
 	   }
 	  
-	  
-       
-      for(roi_size_index=0; roi_size_index< num_roi_height_resize;roi_size_index++)
+	  int midpoint_count = 0;
+	  int roi_size_index; 
+      for(roi_size_index=0; roi_size_index< num_roi_size;roi_size_index++)
       {
-
-		  if((depth_center<small_roi_depth_th2))
+          /*exclude extreme geometry */
+		  if((depth_center<this->_small_roi_depth_th2))
 		  {
 			  y_coor_and_depth_fail_for_small_roi = true;
 		  }
-		  else if((center_point_y_coor<-small_roi_y_th_low)&&(depth_center<small_roi_depth_th1))
+		  else if((center_point_y_coor<-this->_small_roi_y_th_low)&&(depth_center<this->_small_roi_depth_th1))
 		  {
 			  y_coor_and_depth_fail_for_small_roi = true;
 		  }
-		  else if(center_point_y_coor<-small_roi_y_th_high)
+		  else if(center_point_y_coor<-this->_small_roi_y_th_high)
 		  {
 			 y_coor_and_depth_fail_for_small_roi = true;  
 		  }
@@ -322,85 +267,59 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 	   
 	      float upper_limit = center_point_y + predefined_roi_height/height_denominator[roi_size_index] + height_upper_offset[roi_size_index];     /*define the rectangle roi boundary*/
 	      float lower_limit = center_point_y  - predefined_roi_height/height_denominator[roi_size_index] + height_upper_offset[roi_size_index];     /*define the rectangle roi boundary*/
+	      float left_limit = center_point_x - predefined_roi_width/2;            /*define the rectangle roi boundary*/
+	      float right_limit = center_point_x + predefined_roi_width/2;        /*define the rectangle roi boundary*/		  
 		  
 		  /*upper_limit, lower_limit min_max range check to prevent cv error*/
-		  if(upper_limit<15)
-		  {
-		     upper_limit = 15;
-		  }
-		  else if(upper_limit>(preproc_resize_height-15))
-		  {
-			 upper_limit =  preproc_resize_height-15;
-		  }
+		  if(upper_limit<15)   upper_limit = 15;
+		  else if(upper_limit>(preproc_resize_height-15))   upper_limit =  preproc_resize_height-15;	
           
-          if(lower_limit<15)
-		  {
-		     lower_limit = 15;
-		  }
-		  else if(lower_limit>(preproc_resize_height-15))
-		  {
-			 lower_limit =  preproc_resize_height-15;
-		  }		  
+          if(lower_limit<15)   lower_limit = 15;
+		  else if(lower_limit>(preproc_resize_height-15))   lower_limit =  preproc_resize_height-15;  
 		  
-	      float left_limit = center_point_x - predefined_roi_width/2;            /*define the rectangle roi boundary*/
-	      float right_limit = center_point_x + predefined_roi_width/2;        /*define the rectangle roi boundary*/
+
 	    
 		  cv::Mat  array_x_of_mid_point_pixel = cv::Mat::zeros(100, 1, CV_32F);
-
-		  cv::Mat array_y_of_mid_point_pixel = cv::Mat::zeros(100, 1, CV_32F);
-		
+		  cv::Mat array_y_of_mid_point_pixel = cv::Mat::zeros(100, 1, CV_32F);		
 		  cv::Mat array_depth_and_y_coor = cv::Mat::zeros(100, 2, CV_32F);        /* this array is for depth (z of camera frame) and y (camera frame)*/
 		  
-		  int max_y_pixel = 0;
 
-		  int j;
-		 
 		  if(roi_size_index==0)
 		  {
-		  for(j=0; j < midp_of_all_lines.rows; j++)
-		  {
-			
-			  if((midp_of_all_lines.at<cv::Vec2f>(j)[0] > left_limit)&&(midp_of_all_lines.at<cv::Vec2f>(j)[0] < right_limit))
-			  {
-			     if((midp_of_all_lines.at<cv::Vec2f>(j)[1] > lower_limit)&&(midp_of_all_lines.at<cv::Vec2f>(j)[1] < upper_limit))
-				  {
-					  int column_p = std::round(midp_of_all_lines.at<cv::Vec2f>(j)[0]);
-					  int row_p = std::round(midp_of_all_lines.at<cv::Vec2f>(j)[1]);
-					 
-					  //std::cout<<"column_p : "<< column_p<<" \n"<<std::endl;
-					  //std::cout<<"row_p : "<< row_p<<" \n"<<std::endl;
-					  
-					  float depth_tmp =  resized_depth_img_tmp_32f.at<float>(row_p,column_p);
-					 
-					  if(depth_tmp>0.1)
-					  {
-					      float x_coor_tmp = ((float)column_p - px) * depth_tmp / fx;
-						
-					 	  if(row_p>max_y_pixel)
-					 	  {
-							  max_y_pixel = row_p;
-					 	  }
-
-						//std::cout<<"x_coor_tmp : "<< x_coor_tmp<<" \n"<<std::endl;
-		
-						  array_x_coor.at<float>(count)= x_coor_tmp;
-						
-						  array_x_of_mid_point_pixel.at<float>(count) =  midp_of_all_lines.at<cv::Vec2f>(j)[0];
-					      array_y_of_mid_point_pixel.at<float>(count) =  midp_of_all_lines.at<cv::Vec2f>(j)[1];
-						  
-						  count++;
-						   
-					 }
-				  } 
-			   }
-		    }
-	        }
-	   /*	if(center_point_y>max_y_pixel)
+			 int j;
+		     for(j=0; j < midp_of_all_lines.rows; j++)
 		     {
-			     max_y_pixel =  center_point_y;
-		     } */
+			
+			     if((midp_of_all_lines.at<cv::Vec2f>(j)[0] > left_limit)&&(midp_of_all_lines.at<cv::Vec2f>(j)[0] < right_limit))
+			     {
+			        if((midp_of_all_lines.at<cv::Vec2f>(j)[1] > lower_limit)&&(midp_of_all_lines.at<cv::Vec2f>(j)[1] < upper_limit))
+				     {
+					     int column_p = std::round(midp_of_all_lines.at<cv::Vec2f>(j)[0]);
+					     int row_p = std::round(midp_of_all_lines.at<cv::Vec2f>(j)[1]);
+					 
+					     //std::cout<<"column_p : "<< column_p<<" \n"<<std::endl;
+					     //std::cout<<"row_p : "<< row_p<<" \n"<<std::endl;
+					  
+					     float depth_tmp =  resized_depth_img_tmp_32f.at<float>(row_p,column_p);
+					 
+					     if(depth_tmp>0.1)
+					     {
+					         float x_coor_tmp = ((float)column_p - px) * depth_tmp / fx;						
+						   //std::cout<<"x_coor_tmp : "<< x_coor_tmp<<" \n"<<std::endl;
 		
-		    //max_y_pixel = upper_limit;
+						     array_x_coor.at<float>(midpoint_count)= x_coor_tmp;
+						
+						     array_x_of_mid_point_pixel.at<float>(midpoint_count) =  midp_of_all_lines.at<cv::Vec2f>(j)[0];
+					         array_y_of_mid_point_pixel.at<float>(midpoint_count) =  midp_of_all_lines.at<cv::Vec2f>(j)[1];
+						  
+						     midpoint_count++;
+						   
+					    }
+				     } 
+			      }
+		       }
+	        }
+
 		   
 		   int interval = 2;
 		   
@@ -422,14 +341,23 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		   
 		    for(roi_width_offset_index=0;roi_width_offset_index<num_center_width_offset_new;roi_width_offset_index++)
 			{ 
+				 center_point_x_w_offset =  center_point_x + width_offset_ary[roi_width_offset_index];
+					
+				 /*min max range check to prevent cv error*/
+				if(center_point_x_w_offset<=1)
+				{
+				  center_point_x_w_offset = 1;
+				}
+				else if(center_point_x_w_offset>=preproc_resize_width)
+				{
+			       center_point_x_w_offset = preproc_resize_width-1;
+				}
 
-			   int height_offset_ary[3] = {0, -15, 15};
-			   int num_center_height_offset = 3;
+
 			   int num_center_height_offset_new;
-			   
 			   int roi_height_offset_index;
 			   
-     		   if(count>min_numof_lines_4_cluster)
+     		   if(midpoint_count>min_numof_lines_4_cluster)
 		       {   
 		             if(roi_width_offset_index == 0)  /* if roi width offset is zero*/
 		             {
@@ -444,24 +372,13 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 				   {
 					    int height_offset =  height_offset_ary[roi_height_offset_index];
 						
-						 int n = 0;
+						 int data_count = 0;
 			             bool  invalid_depth_flag = false;
 			             int invalid_depth_count = 0;
 						
 			            for (starting_point_y=lower_limit+10+height_offset; starting_point_y<upper_limit-10+height_offset;starting_point_y=starting_point_y+interval)
 			            {  
-				   
-				           center_point_x_w_offset =  center_point_x + width_offset[roi_width_offset_index];
-					
-					       /*min max range check to prevent cv error*/
-					       if(center_point_x_w_offset<=1)
-					       {
-						       center_point_x_w_offset = 1;
-					       }
-					       else if(center_point_x_w_offset>=preproc_resize_width)
-					      {
-						       center_point_x_w_offset = preproc_resize_width-1;
-					       }
+
 					  
 				          int column_p2= std::round(center_point_x_w_offset);
 					      
@@ -470,13 +387,13 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 						  
 						  //std::cout<<"debug_line 7 \n"<<std::endl;
 					   
-					      if(depth_tmp2>invaild_depth_th)
+					      if(depth_tmp2>this->_invaild_depth_th)
 					      {
 						      invalid_depth_count = invalid_depth_count +1;
 							  continue;
 					      }
 					   
-					      if(invalid_depth_count>=invail_depth_count_th)
+					      if(invalid_depth_count>=this->_invail_depth_count_th)
 					      {
 						      invalid_depth_flag= true;
 						      continue;
@@ -487,36 +404,50 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 				 	          float y_coor_tmp = (py-(float)starting_point_y) * depth_tmp2 / fy;   /*there is a reason why py - starting_point_y  (not starting_point_y -py) */
 					 
 					          //std::cout<<"depth_tmp2 : "<< depth_tmp2<<" \n"<<std::endl;
-					          //std::cout<<"y_coor_tmp : "<< y_coor_tmp<<" \n"<<std::endl;
-						      //std::cout<<"n : "<< n<<" \n"<<std::endl;
+							  
+							  if(this->_coor_trans_flag == true)
+							  {
+								  geometry_msgs::PointStamped  point_in, point_out;
+								  
+								  point_in.header.stamp = ros::Time::now();
+                                  point_in.header.frame_id = "human_view"; 
+								  point_in.point.x = 0;
+								  point_in.point.y = -y_coor_tmp;  /*since the sign of y_coor_tmp is reversed, restoring original sign*/ 
+								  point_in.point.z = depth_tmp2;
+								  
+								  this->coordinate_transform(point_in,point_out,15,0.8);
+
+								  y_coor_tmp = -point_out.point.y; /*reversing the sign from the original sign convention*/
+								  depth_tmp2 = point_out.point.z;
+								 
+								  
+							  }
+							  else{}								 
+					             
+							  array_depth_and_y_coor.at<float>(data_count,0) =  depth_tmp2+30;   /* the reason why adding 30 is to avoid singular problem of opencv solve algorithm*/
+					          array_depth_and_y_coor.at<float>(data_count,1) =  y_coor_tmp;
 					 
-					          array_depth_and_y_coor.at<float>(n,0) =  depth_tmp2+30;   /* the reason why adding 30 is to avoid singular problem of opencv solve algorithm*/
-					          array_depth_and_y_coor.at<float>(n,1) =  y_coor_tmp;   
-					 
-					          n++;
+					          data_count++;
 						   
 				           }
 			            } 
                  				
-
-				 
+			 
 				        if(invalid_depth_flag==true)
 				        {
 					      continue;
 				        }
-					
-			
 
-		               if((count > min_numof_lines_4_cluster)&&(n>min_numof_lines_4_cluster))
+		               if(data_count>min_numof_lines_4_cluster)
 		               {  
 		                  /*vector_for_learning include 8 elements*/
 			              /* stair gradient , least square error(x coordinate of map frame (depth) and z coordinate of map frame(rows)) per line,  average error (y coordinate of map frame (cols)), center point x (cam frame), center point y(cam frame), depth, center point x pixel, center point y pixel*/
 		                  std::vector<float>  vector_for_learning ;  
 		   	              //std::cout<<"debug_line 7 \n"<<std::endl;
-		                  cv::Mat  array_x_coor_final = array_x_coor(cv::Range(0, count), cv::Range::all());
-		                  cv::Mat  array_depth_and_y_coor_final = array_depth_and_y_coor(cv::Range(0, n), cv::Range::all());
-		                  cv::Mat  array_x_of_mid_point_final = array_x_of_mid_point_pixel(cv::Range(0, count), cv::Range::all());
-		                  cv::Mat  array_y_of_mid_point_final = array_y_of_mid_point_pixel(cv::Range(0, count), cv::Range::all());
+		                  cv::Mat  array_x_coor_final = array_x_coor(cv::Range(0, data_count), cv::Range::all());
+		                  cv::Mat  array_depth_and_y_coor_final = array_depth_and_y_coor(cv::Range(0, data_count), cv::Range::all());
+		                  cv::Mat  array_x_of_mid_point_final = array_x_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
+		                  cv::Mat  array_y_of_mid_point_final = array_y_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
             
 			              float gradient_out;
 			              float avg_depth_y_error_out;
@@ -524,21 +455,25 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 				          float gradient_sub_diff;
 		   
 			             this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
-			
-			             if(svm_offline_training_flag == true)
+			             
+						 float roi_h;
+					     if(roi_size_index ==0)   roi_h = 200;
+					     else   roi_h = 100;
+						 
+			             if(this->_svm_offline_training_flag == true)
 	                    {  
-				           int roi_h;
-					       if(roi_size_index ==0)
-					       {
-						       roi_h = 200;
-					       }
-					       else
-					      {
-						       roi_h = 100;
-					      }
 	                      in<<function_call_count<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_x_w_offset<<"/"<<center_point_y<<"/"<<roi_h<<"/"<<depth_center<<std::endl;
-	                    }
-			
+	                    } 
+						
+						/* limit the value of outlier (gradient, gradient diff depth y error */
+						if(gradient_out>5)   gradient_out =5;
+						else if(gradient_out < -5)   gradient_out =-5;
+						
+						if(gradient_sub_diff>5)   gradient_sub_diff =5;
+				        else if(gradient_sub_diff < -5)   gradient_sub_diff =-5;
+								
+						if(avg_depth_y_error_out>1)   avg_depth_y_error_out =1;
+
 			             vector_for_learning.push_back(gradient_out);
 				         vector_for_learning.push_back(gradient_sub_diff);
 			             vector_for_learning.push_back(avg_depth_y_error_out);
@@ -548,6 +483,7 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		                 vector_for_learning.push_back(depth_center);
 			             vector_for_learning.push_back(center_point_x);
 			             vector_for_learning.push_back(center_point_y);
+						 vector_for_learning.push_back(roi_h);
 			 
 			             vector_set_for_learning->push_back(vector_for_learning);
 			
@@ -558,7 +494,6 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 			             //std::cout<<"center_point_x : \n"<<center_point_x<<std::endl;
 			             //std::cout<<"center_point_y : \n"<<center_point_y<<std::endl;
 				
-			             // delete vector_for_learning;
 			 
 		                 }
 			        }
@@ -675,13 +610,13 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 		 /* error = (a/b)*x + 1/(b/c) - y */	  
 	     depth_y_error= gradient*array_depth_and_y_coor_final_ls.at<float>(n,0)+1/least_square_out.at<float>(1) - array_depth_and_y_coor_final_ls.at<float>(n,1);
 		 
-		 if(((array_depth_and_y_coor_final_ls.at<float>(n-1,0)+0.1)<array_depth_and_y_coor_final_ls.at<float>(n,0))&&((n-1)>0)&&(non_stair_suspect_flag==false))
+		 if(((array_depth_and_y_coor_final_ls.at<float>(n-1,0)+0.3)<array_depth_and_y_coor_final_ls.at<float>(n,0))&&((n-1)>0)&&(non_stair_suspect_flag==false))
 		 {
 			 non_stair_suspect_flag = true;
 			 non_stair_suspect_pivot_point = array_depth_and_y_coor_final_ls.at<float>(n+1,0);
 			 error_weight_factor = 50;
 		 }
-		 else if((non_stair_suspect_flag == true)&&((non_stair_suspect_pivot_point+0.1)<array_depth_and_y_coor_final_ls.at<float>(n,0)))
+		 else if((non_stair_suspect_flag == true)&&((non_stair_suspect_pivot_point+0.3)<array_depth_and_y_coor_final_ls.at<float>(n,0)))
 		 {
 			 non_stair_suspect_flag = true;
 			 error_weight_factor = 50;
@@ -712,4 +647,35 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 	 function_call_count++;
 	 
 	
+}
+
+
+void STAIR_DETEC_COST_FUNC::coordinate_transform(geometry_msgs::PointStamped& point_in, geometry_msgs::PointStamped& point_out, float head_down_angle, float height)
+{
+	static tf2_ros::Buffer _tfBuffer;
+	static tf2_ros::TransformListener _tfListener(_tfBuffer);
+	
+	static tf2_ros::StaticTransformBroadcaster br;
+	
+	geometry_msgs::TransformStamped transformStamped;
+	
+	transformStamped.header.stamp = ros::Time::now();
+	transformStamped.header.frame_id = "ground_cam";
+	transformStamped.child_frame_id = "human_view";
+	transformStamped.transform.translation.x = 0;
+	transformStamped.transform.translation.y = -height; /*-(robot height(0.8m) - a_waltr height(0.2m)*/
+	transformStamped.transform.translation.z = 0.0;
+	
+	 tf2::Quaternion t;
+	 t.setRPY(-head_down_angle/57.3/*-20degree*/, 0, 0);
+	 
+	 transformStamped.transform.rotation.x = t.x();
+	 transformStamped.transform.rotation.y = t.y();
+	 transformStamped.transform.rotation.z = t.z();
+	 transformStamped.transform.rotation.w = t.w();
+	 
+	 br.sendTransform(transformStamped);
+	
+	
+	_tfBuffer.transform(point_in,point_out,"ground_cam");
 }
