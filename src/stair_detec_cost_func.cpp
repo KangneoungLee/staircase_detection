@@ -320,182 +320,103 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		       }
 	        }
 
-		   
-		   int interval = 2;
-		   
-		   int starting_point_y;
-		   
+ 
 		   int roi_width_offset_index;
 		   float center_point_x_w_offset;
            
 		   int  num_center_width_offset_new;
 		   
-		   if(roi_size_index == 0)  /* if roi size is large one*/
-		   {
-			   num_center_width_offset_new =  1;
-		   }
-		   else
-		   {
-			   num_center_width_offset_new  = num_center_width_offset;
-		   }
+		   /* if roi size is large one*/
+		   if(roi_size_index == 0)   num_center_width_offset_new =  1;
+		   else   num_center_width_offset_new  = num_center_width_offset;
 		   
 		    for(roi_width_offset_index=0;roi_width_offset_index<num_center_width_offset_new;roi_width_offset_index++)
 			{ 
 				 center_point_x_w_offset =  center_point_x + width_offset_ary[roi_width_offset_index];
 					
 				 /*min max range check to prevent cv error*/
-				if(center_point_x_w_offset<=1)
-				{
-				  center_point_x_w_offset = 1;
-				}
-				else if(center_point_x_w_offset>=preproc_resize_width)
-				{
-			       center_point_x_w_offset = preproc_resize_width-1;
-				}
-
+				if(center_point_x_w_offset<=1)   center_point_x_w_offset = 1;
+				else if(center_point_x_w_offset>=preproc_resize_width)   center_point_x_w_offset = preproc_resize_width-1;
 
 			   int num_center_height_offset_new;
 			   int roi_height_offset_index;
 			   
      		   if(midpoint_count>min_numof_lines_4_cluster)
 		       {   
-		             if(roi_width_offset_index == 0)  /* if roi width offset is zero*/
-		             {
-			              num_center_height_offset_new =  num_center_height_offset;
-		             }
-		             else
-		            {
-			             num_center_height_offset_new  = 1;
-		            }
+		            /* if roi width offset is zero*/
+		            if(roi_width_offset_index == 0)    num_center_height_offset_new =  num_center_height_offset;
+		            else   num_center_height_offset_new  = 1;
+		            
 		  
 		           for(roi_height_offset_index = 0;roi_height_offset_index<num_center_height_offset_new;roi_height_offset_index++)
 				   {
 					    int height_offset =  height_offset_ary[roi_height_offset_index];
 						
-						 int data_count = 0;
-			             bool  invalid_depth_flag = false;
-			             int invalid_depth_count = 0;
-						
-			            for (starting_point_y=lower_limit+10+height_offset; starting_point_y<upper_limit-10+height_offset;starting_point_y=starting_point_y+interval)
-			            {  
-
-					  
-				          int column_p2= std::round(center_point_x_w_offset);
-					      
-						  //std::cout<<"debug_line 6 \n"<<std::endl;
-				          float depth_tmp2 =  resized_depth_img_tmp_32f.at<float>(starting_point_y,column_p2);
-						  
-						  //std::cout<<"debug_line 7 \n"<<std::endl;
-					   
-					      if(depth_tmp2>this->_invaild_depth_th)
-					      {
-						      invalid_depth_count = invalid_depth_count +1;
-							  continue;
-					      }
-					   
-					      if(invalid_depth_count>=this->_invail_depth_count_th)
-					      {
-						      invalid_depth_flag= true;
-						      continue;
-					      }
-					   
-				          if(depth_tmp2>0.1)
-				          {
-				 	          float y_coor_tmp = (py-(float)starting_point_y) * depth_tmp2 / fy;   /*there is a reason why py - starting_point_y  (not starting_point_y -py) */
-					 
-					          //std::cout<<"depth_tmp2 : "<< depth_tmp2<<" \n"<<std::endl;
-							  
-							  if(this->_coor_trans_flag == true)
-							  {
-								  geometry_msgs::PointStamped  point_in, point_out;
-								  
-								  point_in.header.stamp = ros::Time::now();
-                                  point_in.header.frame_id = "human_view"; 
-								  point_in.point.x = 0;
-								  point_in.point.y = -y_coor_tmp;  /*since the sign of y_coor_tmp is reversed, restoring original sign*/ 
-								  point_in.point.z = depth_tmp2;
-								  
-								  this->coordinate_transform(point_in,point_out,15,0.8);
-
-								  y_coor_tmp = -point_out.point.y; /*reversing the sign from the original sign convention*/
-								  depth_tmp2 = point_out.point.z;
-								 
-								  
-							  }
-							  else{}								 
-					             
-							  array_depth_and_y_coor.at<float>(data_count,0) =  depth_tmp2+30;   /* the reason why adding 30 is to avoid singular problem of opencv solve algorithm*/
-					          array_depth_and_y_coor.at<float>(data_count,1) =  y_coor_tmp;
-					 
-					          data_count++;
-						   
-				           }
-			            } 
-                 				
-			 
-				        if(invalid_depth_flag==true)
-				        {
-					      continue;
-				        }
-
-		               if(data_count>min_numof_lines_4_cluster)
-		               {  
-		                  /*vector_for_learning include 8 elements*/
-			              /* stair gradient , least square error(x coordinate of map frame (depth) and z coordinate of map frame(rows)) per line,  average error (y coordinate of map frame (cols)), center point x (cam frame), center point y(cam frame), depth, center point x pixel, center point y pixel*/
-		                  std::vector<float>  vector_for_learning ;  
-		   	              //std::cout<<"debug_line 7 \n"<<std::endl;
-		                  cv::Mat  array_x_coor_final = array_x_coor(cv::Range(0, data_count), cv::Range::all());
-		                  cv::Mat  array_depth_and_y_coor_final = array_depth_and_y_coor(cv::Range(0, data_count), cv::Range::all());
-		                  cv::Mat  array_x_of_mid_point_final = array_x_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
-		                  cv::Mat  array_y_of_mid_point_final = array_y_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
-            
-			              float gradient_out;
-			              float avg_depth_y_error_out;
-			              float x_avg_error_out;
-				          float gradient_sub_diff;
-		   
-			             this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
+						int data_count = 0;
+			            bool  invalid_depth_flag = false;
 			             
-						 float roi_h;
-					     if(roi_size_index ==0)   roi_h = 200;
-					     else   roi_h = 100;
-						 
-			             if(this->_svm_offline_training_flag == true)
-	                    {  
-	                      in<<function_call_count<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_x_w_offset<<"/"<<center_point_y<<"/"<<roi_h<<"/"<<depth_center<<std::endl;
-	                    } 
-						
-						/* limit the value of outlier (gradient, gradient diff depth y error */
-						if(gradient_out>5)   gradient_out =5;
-						else if(gradient_out < -5)   gradient_out =-5;
-						
-						if(gradient_sub_diff>5)   gradient_sub_diff =5;
-				        else if(gradient_sub_diff < -5)   gradient_sub_diff =-5;
-								
-						if(avg_depth_y_error_out>1)   avg_depth_y_error_out =1;
+						/* collect depth and y point along a line within the ROI */
+						this->depth_data_collect(resized_depth_img_tmp_32f, array_depth_and_y_coor, fy, py, lower_limit+10+height_offset, upper_limit-10+height_offset, center_point_x_w_offset, &data_count, &invalid_depth_flag);
+						  
+				        if(invalid_depth_flag==true)   continue;
 
-			             vector_for_learning.push_back(gradient_out);
-				         vector_for_learning.push_back(gradient_sub_diff);
-			             vector_for_learning.push_back(avg_depth_y_error_out);
-			             vector_for_learning.push_back(x_avg_error_out);
-			             vector_for_learning.push_back(center_point_x_coor);
-			             vector_for_learning.push_back(center_point_y_coor);
-		                 vector_for_learning.push_back(depth_center);
-			             vector_for_learning.push_back(center_point_x);
-			             vector_for_learning.push_back(center_point_y);
-						 vector_for_learning.push_back(roi_h);
+		                if(data_count>min_numof_lines_4_cluster)
+		                {  
+		                    /*vector_for_learning include 8 elements*/
+			                /* stair gradient , least square error(x coordinate of map frame (depth) and z coordinate of map frame(rows)) per line,  average error (y coordinate of map frame (cols)), center point x (cam frame), center point y(cam frame), depth, center point x pixel, center point y pixel*/
+		                    std::vector<float>  vector_for_learning ;  
+		   	                //std::cout<<"debug_line 7 \n"<<std::endl;
+		                    cv::Mat  array_x_coor_final = array_x_coor(cv::Range(0, data_count), cv::Range::all());
+		                    cv::Mat  array_depth_and_y_coor_final = array_depth_and_y_coor(cv::Range(0, data_count), cv::Range::all());
+		                    cv::Mat  array_x_of_mid_point_final = array_x_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
+		                    cv::Mat  array_y_of_mid_point_final = array_y_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
+            
+			                float gradient_out;
+			                float avg_depth_y_error_out;
+			                float x_avg_error_out;
+				            float gradient_sub_diff;
+		   
+			                this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
+			             
+						    float roi_h;
+					        if(roi_size_index ==0)   roi_h = 200;
+					        else   roi_h = 100;
+						 
+			                if(this->_svm_offline_training_flag == true)
+	                        {  
+	                           in<<function_call_count<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_x_w_offset<<"/"<<center_point_y<<"/"<<roi_h<<"/"<<depth_center<<std::endl;
+	                        } 
+						
+						    /* limit the value of outlier (gradient, gradient diff depth y error */
+						    if(gradient_out>5)   gradient_out =5;
+						    else if(gradient_out < -5)   gradient_out =-5;
+						
+						    if(gradient_sub_diff>5)   gradient_sub_diff =5;
+				            else if(gradient_sub_diff < -5)   gradient_sub_diff =-5;
+								
+						    if(avg_depth_y_error_out>1)   avg_depth_y_error_out =1;
+
+			                vector_for_learning.push_back(gradient_out);
+				            vector_for_learning.push_back(gradient_sub_diff);
+			                vector_for_learning.push_back(avg_depth_y_error_out);
+			                vector_for_learning.push_back(x_avg_error_out);
+			                vector_for_learning.push_back(center_point_x_coor);
+			                vector_for_learning.push_back(center_point_y_coor);
+		                    vector_for_learning.push_back(depth_center);
+			                vector_for_learning.push_back(center_point_x);
+			                vector_for_learning.push_back(center_point_y);
+						    vector_for_learning.push_back(roi_h);
 			 
-			             vector_set_for_learning->push_back(vector_for_learning);
+			                vector_set_for_learning->push_back(vector_for_learning);
 			
-			             //std::cout<<"vector_set_for_learning : \n"<<std::endl;
-			             //std::cout<<"gradient_out : \n"<<gradient_out<<std::endl;
-			             //std::cout<<"avg_depth_y_error_out : \n"<<avg_depth_y_error_out<<std::endl;
-			             //std::cout<<"x_avg_error_out : \n"<<x_avg_error_out<<std::endl;
-			             //std::cout<<"center_point_x : \n"<<center_point_x<<std::endl;
-			             //std::cout<<"center_point_y : \n"<<center_point_y<<std::endl;
-				
-			 
-		                 }
+			                //std::cout<<"vector_set_for_learning : \n"<<std::endl;
+			                //std::cout<<"gradient_out : \n"<<gradient_out<<std::endl;
+			                //std::cout<<"avg_depth_y_error_out : \n"<<avg_depth_y_error_out<<std::endl;
+			                //std::cout<<"x_avg_error_out : \n"<<x_avg_error_out<<std::endl;
+			                //std::cout<<"center_point_x : \n"<<center_point_x<<std::endl;
+			                //std::cout<<"center_point_y : \n"<<center_point_y<<std::endl;
+
+		                }
 			        }
 			    }
             }
@@ -512,34 +433,24 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 {
 	
 	int least_square_index =  std::round(array_depth_and_y_coor_final_ls.rows/2);
-	
-	//std::cout<<"least_square_index : "<< least_square_index<<" \n"<<std::endl;	 
-	
 	cv::Mat  array_depth_and_y_coor_final_sub1 = array_depth_and_y_coor_final_ls(cv::Range(0, least_square_index), cv::Range::all());
-	
 	cv::Mat  array_depth_and_y_coor_final_sub2 = array_depth_and_y_coor_final_ls(cv::Range(least_square_index, array_depth_and_y_coor_final_ls.rows), cv::Range::all());
-	
-	  cv::Scalar avg_x=cv::mean(array_x_coor_final_ls);
-	 
-      //std::cout<<"avg_x : "<< avg_x.val[0]<<" \n"<<std::endl;	 
-     
-	  float error_abs_sum = 0;
-	  float x_avg_error=0;
+	cv::Scalar avg_x=cv::mean(array_x_coor_final_ls);
+
+	float error_abs_sum = 0;
+	float x_avg_error=0;
 	  
-	  int i;
+	int i;
 	  
-	  for(i=0;i<array_x_coor_final_ls.rows;i++)
-	  {
-		  float error = array_x_coor_final_ls.at<float>(i)-avg_x.val[0];
+	for(i=0;i<array_x_coor_final_ls.rows;i++)
+	{
+		float error = array_x_coor_final_ls.at<float>(i)-avg_x.val[0];
 		  
-		  error_abs_sum = error_abs_sum + std::abs(error);
+		error_abs_sum = error_abs_sum + std::abs(error);
 		  
-	  }
+	}
 	x_avg_error = error_abs_sum/array_x_coor_final_ls.rows;
-	
-	//std::cout<<"error_abs_sum : "<< error_abs_sum<<" \n"<<std::endl;
-    //std::cout<<"x_avg_error : "<< x_avg_error<<" \n"<<std::endl;	 	
-	
+
 	cv::Mat least_square_out(2,1,CV_32F);
 	cv::Mat least_square_out_sub1(2,1,CV_32F);
 	cv::Mat least_square_out_sub2(2,1,CV_32F);
@@ -585,15 +496,6 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 		gradient_sub2 = -least_square_out_sub2.at<float>(0)/least_square_out_sub2.at<float>(1);
 	}
 	
-
-	
-//	std::cout<<"array_depth_and_y_coor_final_ls.rows : "<<array_depth_and_y_coor_final_ls.rows<<" \n"<<std::endl;
-//	std::cout<<"array_depth_and_y_coor_final_sub1.rows : "<<array_depth_and_y_coor_final_sub1.rows<<" \n"<<std::endl;
-//	std::cout<<"array_depth_and_y_coor_final_sub2.rows : "<<array_depth_and_y_coor_final_sub2.rows<<" \n"<<std::endl;
-//	std::cout<<"gradient : "<<gradient<<" \n"<<std::endl;
-//	std::cout<<"gradient_sub1 : "<<gradient_sub1<<" \n"<<std::endl;
-//	std::cout<<"least_square_out_sub2.at<float>1 : "<<least_square_out_sub2.at<float>(1)<<" \n"<<std::endl;
-//	 std::cout<<"gradient_sub2 : "<<gradient_sub2<<" \n"<<std::endl;
 	  
 	 float depth_y_error=0;
 	 float  depth_y_error_abs_sum = 0;
@@ -647,6 +549,59 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 	 function_call_count++;
 	 
 	
+}
+
+void STAIR_DETEC_COST_FUNC::depth_data_collect(cv::Mat& depth_img, cv::Mat& array_depth_y, float fy, float py, float lower_lim, float upper_lim, float width_point, int* data_cnt, bool* invalid_depth_on)
+{
+	int invalid_depth_count = 0;
+	int interval = 2;	   
+	int starting_point_y;
+	
+	for (starting_point_y=lower_lim; starting_point_y<upper_lim;starting_point_y=starting_point_y+interval)
+	{  		  
+			int column_p2= std::round(width_point);
+			float depth_tmp2 =  depth_img.at<float>(starting_point_y,column_p2);   /*depth image was  scaled using depth scale*/
+					   
+			if(depth_tmp2>this->_invaild_depth_th)
+			{
+				invalid_depth_count = invalid_depth_count +1;
+				continue;
+			}
+					   
+			if(invalid_depth_count>=this->_invail_depth_count_th)
+			{
+			    *invalid_depth_on= true;
+			    continue;
+			}
+					   
+			if(depth_tmp2>0.1)
+			{
+				float y_coor_tmp = (py-(float)starting_point_y) * depth_tmp2 / fy;   /*there is a reason why py - starting_point_y  (not starting_point_y -py) */
+
+				if(this->_coor_trans_flag == true)
+				{
+					geometry_msgs::PointStamped  point_in, point_out;
+								  
+					point_in.header.stamp = ros::Time::now();
+                    point_in.header.frame_id = "human_view"; 
+					point_in.point.x = 0;
+					point_in.point.y = -y_coor_tmp;  /*since the sign of y_coor_tmp is reversed, restoring original sign*/ 
+					point_in.point.z = depth_tmp2;
+								  
+					this->coordinate_transform(point_in,point_out,15,0.8);
+
+					y_coor_tmp = -point_out.point.y; /*reversing the sign from the original sign convention*/
+					depth_tmp2 = point_out.point.z;
+
+				}
+				else{}								 
+					             
+				array_depth_y.at<float>(*data_cnt,0) =  depth_tmp2+30;   /* the reason why adding 30 is to avoid singular problem of opencv solve algorithm*/
+				array_depth_y.at<float>(*data_cnt,1) =  y_coor_tmp;
+					 
+				*data_cnt++; 
+			}
+	} 	
 }
 
 
