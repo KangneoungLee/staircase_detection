@@ -191,7 +191,7 @@ SVM_TRAINING_ROS::SVM_TRAINING_ROS(ros::NodeHandle m_nh, ros::NodeHandle p_nh):m
 		
 	   int update_rate = 10;
 	   
-	   this->str_det_cost_func_train = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);
+	   this->str_det_cost_func_train = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training,false);
 	   
 	   this->_loop_rate = new ros::Rate(update_rate);
         //in.open("training_set.txt");

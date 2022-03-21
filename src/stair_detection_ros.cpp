@@ -19,6 +19,24 @@
 #include <sys/stat.h> /*directory check*/
 //#include <windows.h>  /*directory check*/
 
+/************Function architecture*******************/
+/*
+1. Core process
+  STAIR_DETECTION_ROS::pre_proc_run()     
+   -- call -->  "str_det_prprc->stair_line_extraction()"   if rgb image is recieved
+   -- call -->  "str_det_prprc->select_lines_from_hough()"        if gray image from line_extraction() is recieved
+   -- call -->  "str_det_prprc->grouping_lines_and_define_centers()"    if gray image from line_extraction() is recieved
+   -- call -->  "str_det_cost_func->cal_cost_wrapper()"    if depth image is recieved
+   
+   if SVM classfiler
+   -- call -->  "STAIR_DETECTION_ROS::stair_case_detc_svm()"
+   if interpretable model classifer
+   -- call -->  "STAIR_DETECTION_ROS::stair_case_detc_rule_base()"
+   if online learning
+   -- call -->  "str_det_online_func->rule_base_detect()"
+
+*/
+
 std::mutex _lock;
 int result_count = 0;
 int img_ok_count = 0;
@@ -444,7 +462,7 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
      this->_debug_msg_1_pub = main_nh.advertise<stair_custom_msg::debug_msg_1>("/front_cam/stair_detection/debug_1", 2);
 
      this->str_det_prprc = new STAIR_DETEC_PRE_PROC();
-	 this->str_det_cost_func = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training);
+	 this->str_det_cost_func = new STAIR_DETEC_COST_FUNC( this->_offline_svm_training, this->_coordinate_transform_needed);
 	 
 	 if(this->_use_online_learning == true)
 	 {
@@ -855,10 +873,10 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 					   int y_start_pixel = 100;
 					   int y_end_pixel = 300;
 				    //this->str_det_cost_func->cal_cost_wrapper_offline_image_true(this->_depth_image, x_pixel, y_start_pixel, y_end_pixel, this->_fx, this->_fy, this->_px, this->_py,  this->_dscale, preproc_resize_height, preproc_resize_width);  /**/
-		           this->str_det_cost_func->cal_cost_wrapper(resized_rgb_image_main, this->_depth_image,roi_center_point_out_main,midp_of_all_lines_main,vector_set_for_learning_main,this->_fx,this->_fy,this->_px,this->_py,this->_dscale,this->_min_numof_lines_4_cluster, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width, this->_coordinate_transform_needed);
+		           this->str_det_cost_func->cal_cost_wrapper(resized_rgb_image_main, this->_depth_image,roi_center_point_out_main,midp_of_all_lines_main,vector_set_for_learning_main,this->_fx,this->_fy,this->_px,this->_py,this->_dscale,this->_min_numof_lines_4_cluster, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width);
 	        }
 	
-	        if(!resized_gray_image_main.empty())
+	        if(!resized_rgb_image_main.empty())
             {
 				
 			   if(this->_use_online_learning == true)

@@ -8,7 +8,6 @@ Staircase detection sw description
 
 - stiar_detec_cost_func.cpp : calculate three factors
 
-- stair_detec_online_func.cpp : online learning function
 
 
 

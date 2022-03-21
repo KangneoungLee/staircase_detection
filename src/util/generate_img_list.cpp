@@ -2,7 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <io.h> /*this io header is for Windows*/
+//#include <io.h> /*this io header is for Windows*/
 
 #include <sys/types.h>/*this io header is for Linux*/
 #include <dirent.h>/*this io header is for Linux*/
