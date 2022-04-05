@@ -8,7 +8,7 @@ STAIR_DETEC_COST_FUNC::STAIR_DETEC_COST_FUNC(bool svm_oft_flag, bool coor_trans_
 	if(this->_svm_offline_training_flag == true)
 	{
 		in.open("training_set.txt");
-		in<<"function_call_count /"<<"gradient, unit:m/m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x_avg_error, unit:m/"<<"center_point_x_pixel, unit: pixel/"<<"center_point_y_pixel, unit :pixel"<<std::endl ;
+		in<<"function_call_count /"<<"gradient, unit:m/m  /"<<"continuity_factor_out, unit:m /"<<"deviation_cost, unit:m /"<<"x_avg_error, unit:m/"<<"center_point_x_pixel, unit: pixel/"<<"center_point_y_pixel, unit :pixel"<<std::endl ;
 	}
 	
 	this->_small_roi_depth_th1 = 6;
@@ -120,11 +120,11 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 	 cv::Mat  array_depth_and_y_coor_final = array_depth_and_y_coor(cv::Range(0, n), cv::Range::all());
 	  
 	 float gradient_out;
-	 float avg_depth_y_error_out;
+	 float deviation_cost_out;
 	 float x_avg_error_out;
-	 float gradient_sub_diff;
+	 float continuity_factor_out;
 	 std::cout<<"debugn line1 "<<" \n"<<std::endl;
-	 this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
+	 this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &continuity_factor_out, &deviation_cost_out, &x_avg_error_out);
 	 
 	if(gradient_out>5)
 	{
@@ -135,23 +135,23 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper_offline_image_true(cv::Mat& depth_i
 		gradient_out =-5;
 	}
 						
-	if(gradient_sub_diff>5)
+	if(continuity_factor_out>5)
 	{
-		gradient_sub_diff =5;
+		continuity_factor_out =5;
 	}
-	else if(gradient_sub_diff < -5)
+	else if(continuity_factor_out < -5)
 	{
-		gradient_sub_diff =-5;
+		continuity_factor_out =-5;
 	}
 						
 						
-	if(avg_depth_y_error_out>1)
+	if(deviation_cost_out>10)
 	{
-		avg_depth_y_error_out =1;
+		deviation_cost_out =10;
 	}
 	 
 	 std::cout<<"debugn line2 "<<" \n"<<std::endl;
-	 in<<0<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_col<<"/"<<center_point_row<<"/"<<label<<"/"<<depth_center<<std::endl;
+	 in<<0<<"/"<<gradient_out<<"/"<<continuity_factor_out<<"/"<<deviation_cost_out<<"/"<<x_avg_error_out*5<<"/"<<center_point_col<<"/"<<center_point_row<<"/"<<label<<"/"<<depth_center<<std::endl;
 
 
 }	
@@ -356,8 +356,9 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 			            bool  invalid_depth_flag = false;
 			             
 						/* collect depth and y point along a line within the ROI */
+
 						this->depth_data_collect(resized_depth_img_tmp_32f, array_depth_and_y_coor, fy, py, lower_limit+10+height_offset, upper_limit-10+height_offset, center_point_x_w_offset, &data_count, &invalid_depth_flag);
-						  
+
 				        if(invalid_depth_flag==true)   continue;
 
 		                if(data_count>min_numof_lines_4_cluster)
@@ -372,33 +373,33 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 		                    cv::Mat  array_y_of_mid_point_final = array_y_of_mid_point_pixel(cv::Range(0, midpoint_count), cv::Range::all());
             
 			                float gradient_out;
-			                float avg_depth_y_error_out;
+			                float deviation_cost_out;
 			                float x_avg_error_out;
-				            float gradient_sub_diff;
+				            float continuity_factor_out;
 		   
-			                this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &gradient_sub_diff, &avg_depth_y_error_out, &x_avg_error_out);
-			             
+			                this->least_square_fit(array_x_coor_final, array_depth_and_y_coor_final, &gradient_out, &continuity_factor_out, &deviation_cost_out, &x_avg_error_out);
+							     
 						    float roi_h;
 					        if(roi_size_index ==0)   roi_h = 200;
 					        else   roi_h = 100;
 						 
 			                if(this->_svm_offline_training_flag == true)
 	                        {  
-	                           in<<function_call_count<<"/"<<gradient_out<<"/"<<gradient_sub_diff<<"/"<<avg_depth_y_error_out*10<<"/"<<x_avg_error_out*5<<"/"<<center_point_x_w_offset<<"/"<<center_point_y<<"/"<<roi_h<<"/"<<depth_center<<std::endl;
+	                           in<<function_call_count<<"/"<<gradient_out<<"/"<<continuity_factor_out<<"/"<<deviation_cost_out<<"/"<<x_avg_error_out*5<<"/"<<center_point_x_w_offset<<"/"<<center_point_y<<"/"<<roi_h<<"/"<<depth_center<<std::endl;
 	                        } 
 						
 						    /* limit the value of outlier (gradient, gradient diff depth y error */
 						    if(gradient_out>5)   gradient_out =5;
 						    else if(gradient_out < -5)   gradient_out =-5;
 						
-						    if(gradient_sub_diff>5)   gradient_sub_diff =5;
-				            else if(gradient_sub_diff < -5)   gradient_sub_diff =-5;
+						    if(continuity_factor_out>5)   continuity_factor_out =5;
+				            else if(continuity_factor_out < -5)   continuity_factor_out =-5;
 								
-						    if(avg_depth_y_error_out>1)   avg_depth_y_error_out =1;
+						    if(deviation_cost_out>10)   deviation_cost_out =10;
 
 			                vector_for_learning.push_back(gradient_out);
-				            vector_for_learning.push_back(gradient_sub_diff);
-			                vector_for_learning.push_back(avg_depth_y_error_out);
+				            vector_for_learning.push_back(continuity_factor_out);
+			                vector_for_learning.push_back(deviation_cost_out);
 			                vector_for_learning.push_back(x_avg_error_out);
 			                vector_for_learning.push_back(center_point_x_coor);
 			                vector_for_learning.push_back(center_point_y_coor);
@@ -411,7 +412,7 @@ void STAIR_DETEC_COST_FUNC::cal_cost_wrapper(const cv::Mat& rgb_input, cv::Mat& 
 			
 			                //std::cout<<"vector_set_for_learning : \n"<<std::endl;
 			                //std::cout<<"gradient_out : \n"<<gradient_out<<std::endl;
-			                //std::cout<<"avg_depth_y_error_out : \n"<<avg_depth_y_error_out<<std::endl;
+			                //std::cout<<"deviation_cost_out : \n"<<deviation_cost_out<<std::endl;
 			                //std::cout<<"x_avg_error_out : \n"<<x_avg_error_out<<std::endl;
 			                //std::cout<<"center_point_x : \n"<<center_point_x<<std::endl;
 			                //std::cout<<"center_point_y : \n"<<center_point_y<<std::endl;
@@ -543,6 +544,7 @@ void STAIR_DETEC_COST_FUNC::least_square_fit(cv::Mat& array_x_coor_final_ls, cv:
 	 
 	 *gradient_out=gradient;
 	 *avg_depth_y_error_out=avg_depth_y_error;
+	 *avg_depth_y_error_out=*avg_depth_y_error_out*10; /*scale up */
 	 *x_avg_error_out=x_avg_error;
 	 *gradient_sub_diff = std::abs(std::abs(gradient_sub1) - std::abs(gradient_sub2));
 	 
@@ -558,10 +560,10 @@ void STAIR_DETEC_COST_FUNC::depth_data_collect(cv::Mat& depth_img, cv::Mat& arra
 	int starting_point_y;
 	
 	for (starting_point_y=lower_lim; starting_point_y<upper_lim;starting_point_y=starting_point_y+interval)
-	{  		  
+	{  		
 			int column_p2= std::round(width_point);
 			float depth_tmp2 =  depth_img.at<float>(starting_point_y,column_p2);   /*depth image was  scaled using depth scale*/
-					   
+
 			if(depth_tmp2>this->_invaild_depth_th)
 			{
 				invalid_depth_count = invalid_depth_count +1;
@@ -595,11 +597,11 @@ void STAIR_DETEC_COST_FUNC::depth_data_collect(cv::Mat& depth_img, cv::Mat& arra
 
 				}
 				else{}								 
-					             
+	             
 				array_depth_y.at<float>(*data_cnt,0) =  depth_tmp2+30;   /* the reason why adding 30 is to avoid singular problem of opencv solve algorithm*/
 				array_depth_y.at<float>(*data_cnt,1) =  y_coor_tmp;
-					 
-				*data_cnt++; 
+	 
+				*data_cnt = *data_cnt + 1;   /* do not use *data_cnt++;  --> trap occurs */
 			}
 	} 	
 }

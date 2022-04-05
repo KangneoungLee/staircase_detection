@@ -146,8 +146,8 @@ class STAIR_DETECTION_ROS{
 		 std::vector<float> depth_info_vec;
 		 
 		 std::vector<float> debug_gradient;
-		 std::vector<float> debug_gradient_diff;
-		 std::vector<float> debug_depth_y_error;
+		 std::vector<float> debug_continuity_factor;
+		 std::vector<float> debug_deviation_cost;
 		 
 		 stair_custom_msg::stairlocation _stair_pose;
 		 stair_custom_msg::pixel_stairlocation _stair_center;
@@ -193,9 +193,10 @@ class STAIR_DETECTION_ROS{
 	    void run();
 		void pre_proc_run();
 		void publish_msg();
-		void stair_case_detc_rule_base(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning);
-		void stair_case_detc_svm(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning);
-		void stair_case_detc_rgb_only(const cv::Mat& rgb_input, int final_center_point_col,int final_center_point_row);
+		
+		bool stair_case_detc_rule_base(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning);
+		bool stair_case_detc_svm(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning);
+		
 		void rgb_image_callback(const sensor_msgs::Image::ConstPtr& msg, int value);
 		void depth_image_callback(const sensor_msgs::Image::ConstPtr& msg, int value);
 		void rgb_cam_info_callback(const sensor_msgs::CameraInfo::ConstPtr& msg, int value);
@@ -225,11 +226,11 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 {
 	_detected_data_write_roi_100.open("detected_data_set_roi_100.txt");
 	
-	_detected_data_write_roi_100<<"gradient, unit:m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
+	_detected_data_write_roi_100<<"gradient, unit:m  /"<<"continuity_factor, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
 	
 	_detected_data_write_roi_200.open("detected_data_set_roi_200.txt");
 	
-	_detected_data_write_roi_200<<"gradient, unit:m  /"<<"gradient_diff, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
+	_detected_data_write_roi_200<<"gradient, unit:m  /"<<"continuity_factor, unit:m /"<<"avg_depth_y_error, unit:m /"<<"x pixel /"<<"y pixel /"<<std::endl ;
 	 
 	int update_rate = 10;
 	
@@ -295,6 +296,8 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	  float relative_depth_conv_weight = -0.012;
 	  float relative_depth_conv_bias = 3.5;
 	 
+	 std::string svm_model_dir = "/home/kangneoung/stair_detection/src/stair_detection/svm_train.xml";
+	 
 	 std::string camera_frame_id = "camera_aligned_depth_to_color_frame";
 	 
 	 std::string testing_set_rgb_dir = "/home/kangneoung/stair_detection/src/stair_detection/image_set/testing/true/long_stair/rgb";
@@ -307,6 +310,7 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 param_nh.getParam("encoding_rgb_flag",encoding_rgb_flag);
 	 param_nh.getParam("offline_svm_training",offline_svm_training); /*generate svm training set using real time image */
 	 param_nh.getParam("use_svm_classifier",use_svm_classifier);
+	 param_nh.getParam("svm_model_dir",svm_model_dir);
 	 param_nh.getParam("use_only_rgb_to_detect_staircase",use_only_rgb_to_detect_staircase);
 	 param_nh.getParam("image_resize_height",preproc_resize_height);
 	 param_nh.getParam("image_resize_width",preproc_resize_width);
@@ -475,7 +479,7 @@ STAIR_DETECTION_ROS::STAIR_DETECTION_ROS(ros::NodeHandle m_nh, ros::NodeHandle p
 	 {
 	 	 try
 			{
-		       classifier = cv::Algorithm::load<cv::ml::SVM>("/home/kangneoung/stair_detection/src/stair_detection/svm_train.xml");
+		       classifier = cv::Algorithm::load<cv::ml::SVM>(svm_model_dir);
 			}
 		catch(int e)
 			{
@@ -569,15 +573,12 @@ void STAIR_DETECTION_ROS::read_rgb_depth_file_list()
 		 //_rgb_text_filter_in << this->_rgb_image_file <<std::endl;   /*text filtering*/
 		 //_depth_text_filter_in << this->_depth_image_file <<std::endl; /*text filtering*/
 	 }
-	 
-	  //std::cout<<" this->_image_open_ok :"<< this->_image_open_ok<<"\n"<<std::endl;
+
 	 
 	 if(this->_reading_status==1)
 	 {
 	    string_read_count++;
 	 }
-	
-	   // std::cout<<"string_read_count :"<<string_read_count<<"\n"<<std::endl;
 	
 	 if(this->_reading_status!=1)
 	 {
@@ -703,8 +704,8 @@ void STAIR_DETECTION_ROS::publish_msg()
 		  
 
 		 this->_debug_msg1.gradient_vec = this->debug_gradient;
-		 this->_debug_msg1.gradient_diff_vec = this->debug_gradient_diff;
-		 this->_debug_msg1.depth_y_error_vec = this->debug_depth_y_error;
+		 this->_debug_msg1.continuity_factor_vec = this->debug_continuity_factor;
+		 this->_debug_msg1.deviation_cost_vec = this->debug_deviation_cost;
 		 
 		 this->_debug_msg_1_pub.publish(this->_debug_msg1);
 		 
@@ -720,8 +721,8 @@ void STAIR_DETECTION_ROS::publish_msg()
 	 this->depth_info_vec.clear();
 	 
 	  this->debug_gradient.clear();
-	  this->debug_gradient_diff.clear();
-	  this->debug_depth_y_error.clear();
+	  this->debug_continuity_factor.clear();
+	  this->debug_deviation_cost.clear();
 	
 }
 
@@ -735,12 +736,11 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 	   cv::Mat resized_gray_image_main; 
        cv::Mat resized_rgb_image_main; 	   
 	   
+	   std::string output_rgb_save_dir;
+	   
 	   int while_count = 0;
 	   int while_count_th =1;
 	 
-     std::cout<<"_offline_performance_test : "<<this->_offline_performance_test<<"\n"<<std::endl;	 
-	 //std::cout<<"_use_only_rgb_to_detect_staircase : "<<this->_use_only_rgb_to_detect_staircase<<"\n"<<std::endl;
-	   
 	 if(this->_offline_performance_test == true)
 	 { 
 		if(this->_reading_status<2)
@@ -779,8 +779,6 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 		}	
 	 }
 	 
-	//std::cout<<"this->_image_open_ok  : "<<this->_image_open_ok <<"\n"<<std::endl;	 
-	
 	bool single_image_read_for_rgb = false;
 	if(single_image_read_for_rgb ==true)
 	{
@@ -835,7 +833,22 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 				  float depth_center;
 				  
 				  this->_stair_case_detc_flag= this->str_det_only_rgb->stair_case_detec_only_rgb(resized_rgb_image_main,roi_center_point_out_main,midp_of_all_lines_main,&final_center_point_col_temp,&final_center_point_row_temp,this->_min_numof_lines_4_cluster_rgb_only, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width);
-				  this->stair_case_detc_rgb_only(resized_rgb_image_main,final_center_point_col_temp,final_center_point_row_temp);
+				  
+				  if(this->_stair_case_detc_flag == true)
+	              {
+		              cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
+			
+		              rectangle_tmp1_pt1.x =final_center_point_col_temp-30;
+		              rectangle_tmp1_pt1.y =final_center_point_row_temp+30;
+		
+		              rectangle_tmp1_pt2.x =final_center_point_col_temp+30;
+		              rectangle_tmp1_pt2.y =final_center_point_row_temp-30;
+			
+	                  cv::rectangle(resized_rgb_image_main, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
+	              }
+				  
+				  this->_stair_case_output_image = resized_rgb_image_main.clone();
+				  
 				  
 				  if(!_depth_image.empty())
 				  {
@@ -867,7 +880,7 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 		 {
 	        if(!_depth_image.empty())
 	        {
-				    			           unsigned short preproc_resize_height = 480; 
+                       unsigned short preproc_resize_height = 480; 
 					   unsigned short preproc_resize_width = 848;
 					   int x_pixel = 300;
 					   int y_start_pixel = 100;
@@ -876,46 +889,59 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 		           this->str_det_cost_func->cal_cost_wrapper(resized_rgb_image_main, this->_depth_image,roi_center_point_out_main,midp_of_all_lines_main,vector_set_for_learning_main,this->_fx,this->_fy,this->_px,this->_py,this->_dscale,this->_min_numof_lines_4_cluster, this->_predefined_roi_height,  this->_predefined_roi_width, this->_preproc_resize_height,this->_preproc_resize_width);
 	        }
 	
-	        if(!resized_rgb_image_main.empty())
+	        if(!resized_rgb_image_main.empty()&&!_depth_image.empty())
             {
-				
+			  
+			   bool detect_flag=false;
+			   
 			   if(this->_use_online_learning == true)
 			   {
-				   this->str_det_online_func->rule_base_detect(resized_rgb_image_main, vector_set_for_learning_main);
+				   detect_flag=this->str_det_online_func->rule_base_detect(resized_rgb_image_main, this->_depth_image, vector_set_for_learning_main, this->_fx, this->_px, this->_fy, this->_py, this->_dscale);
 			   }
 	           else if(this->_use_svm_classifier == true)
 	           {
-		           this->stair_case_detc_svm(resized_rgb_image_main, vector_set_for_learning_main);	
+		           detect_flag=this->stair_case_detc_svm(resized_rgb_image_main, vector_set_for_learning_main);	
 	            }
 	           else
 	           {
-                  this->stair_case_detc_rule_base(resized_rgb_image_main, vector_set_for_learning_main);		 
-	           }  
+                  detect_flag=this->stair_case_detc_rule_base(resized_rgb_image_main, vector_set_for_learning_main);		 
+	           }
+			   
+			   this->_stair_case_detc_flag = detect_flag;
+			   this->_stair_case_output_image = resized_rgb_image_main.clone();
+			   
+
 	        }
 		 }
 		 
+		 
+		if(this->_stair_case_detc_flag==true)
+	    {
+			result_count=result_count+1;
+			this->_detection_count = this->_detection_count + 1;
+			std::cout<<"detection count " <<this->_detection_count<<std::endl;
+		}
+		  
+		 if(this->_offline_performance_test == true)
+	     {
+            output_rgb_save_dir = this->_result_save_dir + "/" +  this->_rgb_image_file + "result"+".png";
+			cv::imwrite( output_rgb_save_dir, this->_stair_case_output_image);
+	     }
+			   
+		 if(this->_implementation_on_jetson == false)
+	    {
+		    cv::imshow("stair case ROI", this->_stair_case_output_image);
+	        cv::waitKey(5);
+	    }
+			   
 		 while_count = while_count +1;
 		 
-		 //std::cout<<"while_count : "<<while_count<<"\n"<<std::endl;
 	 }
 	 
 	 if((this->_image_open_ok == true)&&(this->_stair_case_detc_flag == false))
 	 {
 		 _not_detected_list<<this->_rgb_image_file<<std::endl;
-		 
-		 std::vector<std::vector<float>>::iterator it;
-		 
-		 
-		 //for(it=vector_set_for_learning_main->begin(); it!=vector_set_for_learning_main->end(); it++)
-	     //{  
-	   
-		   //_not_detected_list<<"gradient"<<it->at(0)<<"gradient diff:   "<<it->at(1)<<"depth_y_error:   "<<(it->at(2))*10<<std::endl;
-		
-	     //}
 	 }
-	 
-	//std::cout<<"img_ok_count : "<<img_ok_count<<"\n"<<std::endl;
-	 //std::cout<<"result_count : "<<result_count<<"\n"<<std::endl;
 	 
      this->publish_msg();
 	 
@@ -926,13 +952,13 @@ void STAIR_DETECTION_ROS::pre_proc_run()
 	 delete vector_set_for_learning_main;
 }
 
-void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning)
+bool STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning)
 {
 	std::vector<std::vector<float>>::iterator it;
 	
 	float gradient;
-	float gradient_diff;
-	float depth_y_error;
+	float continuity_factor;
+	float deviation_cost;
 	float x_avg_error;
 	float x_coor_cam_frame_tmp;
 	float y_coor_cam_frame_tmp;
@@ -954,8 +980,6 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 	
 	int i=0;
 	
-	std::cout<<"vector_set_for_learning_size : "<<vector_set_for_learning->size()<<"\n"<<std::endl;
-	
 	for(it=vector_set_for_learning->begin(); it!=vector_set_for_learning->end(); it++)
 	{  
 	   
@@ -963,18 +987,18 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 		
 		std::cout<<"gradient : "<<gradient<<"\n"<<std::endl;
 		
-		gradient_diff = it->at(1);
+		continuity_factor = it->at(1);
 		
-		std::cout<<"gradient_diff : "<<gradient_diff<<"\n"<<std::endl;
+		std::cout<<"continuity_factor : "<<continuity_factor<<"\n"<<std::endl;
 		
-		depth_y_error = (it->at(2))*10;
+		//deviation_cost = (it->at(2))*10;
+		deviation_cost = it->at(2);
 		
-		std::cout<<"depth_y_error : "<<depth_y_error<<"\n"<<std::endl;
+		std::cout<<"deviation_cost : "<<deviation_cost<<"\n"<<std::endl;
 		
 		x_avg_error = it ->at(3);
-		
-		//std::cout<<"x_avg_error : "<<x_avg_error<<"\n"<<std::endl;
-		if((gradient>3)||(std::abs(gradient_diff)>2)||(depth_y_error>10))
+
+		if((gradient>=3)||(std::abs(continuity_factor)>=2)||(deviation_cost>=10))
 		{
 			continue;
 		}
@@ -989,7 +1013,7 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 		std::cout<<"rule_base_depth_y_error_th_interp : "<<rule_base_depth_y_error_th_interp<<"\n"<<std::endl;
 		
 		
-		if((gradient<this->_rule_base_grad_max)&&(gradient>this->_rule_base_grad_min)&&(gradient_diff<gradient_diff_th_interp))
+		if((gradient<this->_rule_base_grad_max)&&(gradient>this->_rule_base_grad_min)&&(continuity_factor<gradient_diff_th_interp))
 		{
 			gradient_condition_ok = true;
 		}
@@ -998,7 +1022,7 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			gradient_condition_ok = false;
 		}
         
-         if((depth_y_error<rule_base_depth_y_error_th_interp)&&(depth_y_error>_rule_base_depth_y_error_th_min))
+         if((deviation_cost<rule_base_depth_y_error_th_interp)&&(deviation_cost>_rule_base_depth_y_error_th_min))
 		{
 			depth_y_error_condition_ok = true;
 		}
@@ -1019,7 +1043,7 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 		if((gradient_condition_ok==true)&&(depth_y_error_condition_ok==true)&&(avg_x_error_condition_ok==true))
 		{
 			stair_case_detc_flag = true;
-			this->_stair_case_detc_flag = stair_case_detc_flag;
+			//this->_stair_case_detc_flag = stair_case_detc_flag;
 			x_coor_cam_frame_tmp = it->at(4);
 			y_coor_cam_frame_tmp = it->at(5);
 			z_coor_cam_frame_tmp = it->at(6);
@@ -1045,109 +1069,57 @@ void STAIR_DETECTION_ROS::stair_case_detc_rule_base(const cv::Mat& rgb_input, st
 			 }		 
 			
 			 this->debug_gradient.push_back(gradient);
-			 this->debug_gradient_diff.push_back(gradient_diff);
-			 this->debug_depth_y_error.push_back(depth_y_error);
+			 this->debug_continuity_factor.push_back(continuity_factor);
+			 this->debug_deviation_cost.push_back(deviation_cost);
 			
              if(roi_size <101)
 			 {
-		 	    _detected_data_write_roi_100<<gradient<<" "<<gradient_diff<<" "<<depth_y_error<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
+		 	    _detected_data_write_roi_100<<gradient<<" "<<continuity_factor<<" "<<deviation_cost<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
 			 }
 			 else
 			 {
-			    _detected_data_write_roi_200<<gradient<<" "<<gradient_diff<<" "<<depth_y_error<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
+			    _detected_data_write_roi_200<<gradient<<" "<<continuity_factor<<" "<<deviation_cost<<" "<<x_center_pixel<<" "<<y_center_pixel<<std::endl;
 			 }
 			
-			//break;
+			break;
 		}
 		else
 		{
 			stair_case_detc_flag = false;
 		}
-		
-	 //  if(stair_case_detc_flag==true)
-	 //  {
-
-		   
-	//		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
-			
-	//		rectangle_tmp1_pt1.x =x_center_pixel-30;
-	//	    rectangle_tmp1_pt1.y =y_center_pixel+30;
-		
-	//	    rectangle_tmp1_pt2.x =x_center_pixel+30;
-	//	    rectangle_tmp1_pt2.y =y_center_pixel-30;
-			
-	//		 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			 
-	//		 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//		 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	 //  }
 
 		i++;
 	}
 	
-
-	//std::cout<<"gradient_condition_ok : "<<gradient_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"depth_y_error_condition_ok : "<<depth_y_error_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"avg_x_error_condition_ok : "<<avg_x_error_condition_ok<<"\n"<<std::endl;
-	//std::cout<<"stair_case_detc_flag : "<<stair_case_detc_flag<<"\n"<<std::endl;
-	
-	if(stair_case_detc_flag==true)
+	if(stair_case_detc_flag == true)
 	{
-			this->_detection_count = this->_detection_count + 1;
-            
+		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
 			
+		rectangle_tmp1_pt1.x =x_center_pixel-30;
+		rectangle_tmp1_pt1.y =y_center_pixel+30;
 		
-		
-			cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
+		rectangle_tmp1_pt2.x =x_center_pixel+30;
+		rectangle_tmp1_pt2.y =y_center_pixel-30;
 			
-			rectangle_tmp1_pt1.x =x_center_pixel-30;
-		    rectangle_tmp1_pt1.y =y_center_pixel+30;
+	     cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
 		
-		    rectangle_tmp1_pt2.x =x_center_pixel+30;
-		    rectangle_tmp1_pt2.y =y_center_pixel-30;
-			
-			 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			  
-			 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-			 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
 	}
+	
 
-	std::cout<<"detection count " <<this->_detection_count<<std::endl;
-	
-	this->_stair_case_output_image=rgb_input.clone();
-	
-	 if(this->_implementation_on_jetson == false)
-	 {
-		  cv::imshow("stair case ROI", rgb_input);
-	      cv::waitKey(5);
-	 }
-    
-	std::string output_rgb_save_dir;
-	std::string index = std::to_string(string_read_count);
-	
-	if(this->_offline_performance_test == true)
-	{
-		if(1/*this->_stair_case_detc_flag==true*/)
-		{
-			output_rgb_save_dir = this->_result_save_dir + "/" +  this->_rgb_image_file + "result"+".png";
-			cv::imwrite( output_rgb_save_dir, this->_stair_case_output_image);
-			
-			if(this->_stair_case_detc_flag==true)
-			{
-			    result_count=result_count+1;
-			}
-		}
-	}
+	return stair_case_detc_flag;
+
+
+
 }
 
 
-void STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning)
+bool STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vector<std::vector<float>>* vector_set_for_learning)
 {
 	std::vector<std::vector<float>>::iterator it;
 	
 	float gradient;
-	float gradient_diff;
-	float depth_y_error;
+	float continuity_factor;
+	float deviation_cost;
 	float x_avg_error;
 	float x_coor_cam_frame_tmp;
 	float y_coor_cam_frame_tmp;
@@ -1167,30 +1139,22 @@ void STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vec
 	for(it=vector_set_for_learning->begin(); it!=vector_set_for_learning->end(); it++)
 	{  
 	   
-		gradient = it->at(0);
+		gradient = it->at(0);			
+		continuity_factor = it->at(1);
 		
-		//std::cout<<"gradient : "<<gradient<<"\n"<<std::endl;
+		//deviation_cost = (it->at(2))*10;
 		
-		gradient_diff = it->at(1);
-		
-		//std::cout<<"gradient_diff : "<<gradient_diff<<"\n"<<std::endl;
-		
-		depth_y_error = (it->at(2))*10;
-		
-		//std::cout<<"depth_y_error : "<<depth_y_error<<"\n"<<std::endl;
-		
+		deviation_cost = it->at(2);	
 		x_avg_error = it ->at(3);
 		
 		
 		
-		if((gradient>3)||(std::abs(gradient_diff)>2)||(depth_y_error>10))
+		if((gradient>=3)||(std::abs(continuity_factor)>=2)||(deviation_cost>=10))
 		{
 			continue;
 		}
-
-		//std::cout<<"x_avg_error : "<<x_avg_error<<"\n"<<std::endl;
 	    
-		float training_array_temp[1][3] = {gradient, gradient_diff, depth_y_error};  /* svm was trained with 10 times depth_y_error*/
+		float training_array_temp[1][3] = {gradient, continuity_factor, deviation_cost};  /* svm was trained with 10 times deviation_cost*/
 		
 		cv::Mat test_mat(1, 3, CV_32F,training_array_temp);
 		
@@ -1199,14 +1163,14 @@ void STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vec
 		if(response==1)
 		{
 			stair_case_detc_flag = true;
-			this->_stair_case_detc_flag = stair_case_detc_flag;
+			//this->_stair_case_detc_flag = stair_case_detc_flag;
 			x_coor_cam_frame_tmp = it->at(4);
 			y_coor_cam_frame_tmp = it->at(5);
 			z_coor_cam_frame_tmp = it->at(6);
 			x_center_pixel = it->at(7);
 			y_center_pixel = it->at(8);
 			
-			 std::cout<<"gradient : "<<gradient<<" gradient_diff : "<<gradient_diff<<" depth_y_error :"<<depth_y_error<<"\n"<<std::endl;
+			 std::cout<<"gradient : "<<gradient<<" continuity_factor : "<<continuity_factor<<" deviation_cost :"<<deviation_cost<<"\n"<<std::endl;
 			 
 			this->x_coor_cam_frame_vec.push_back(x_coor_cam_frame_tmp);
 			this->y_coor_cam_frame_vec.push_back(y_coor_cam_frame_tmp);
@@ -1227,84 +1191,38 @@ void STAIR_DETECTION_ROS::stair_case_detc_svm(const cv::Mat& rgb_input, std::vec
 			 
 			 
 			 this->debug_gradient.push_back(gradient);
-			 this->debug_gradient_diff.push_back(gradient_diff);
-			 this->debug_depth_y_error.push_back(depth_y_error);
+			 this->debug_continuity_factor.push_back(continuity_factor);
+			 this->debug_deviation_cost.push_back(deviation_cost);
 			 
 			 
-			//break;
+			break;
 		}
-		
-		
-	   if(stair_case_detc_flag==true)
-	   {
-			cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
-			
-			rectangle_tmp1_pt1.x =x_center_pixel-30;
-		    rectangle_tmp1_pt1.y =y_center_pixel+30;
-		
-		    rectangle_tmp1_pt2.x =x_center_pixel+30;
-		    rectangle_tmp1_pt2.y =y_center_pixel-30;
-			
-			 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			 
-			 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-			 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	    }
 
 		i++;
 	}
 	
-	
-	//if(stair_case_detc_flag==true)
-	//{
-	//		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
+	if(stair_case_detc_flag == true)
+	{
+		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
 			
-	//		rectangle_tmp1_pt1.x =x_center_pixel-30;
-	//	    rectangle_tmp1_pt1.y =y_center_pixel+30;
+		rectangle_tmp1_pt1.x =x_center_pixel-30;
+		rectangle_tmp1_pt1.y =y_center_pixel+30;
 		
-	//	    rectangle_tmp1_pt2.x =x_center_pixel+30;
-	//	    rectangle_tmp1_pt2.y =y_center_pixel-30;
+		rectangle_tmp1_pt2.x =x_center_pixel+30;
+		rectangle_tmp1_pt2.y =y_center_pixel-30;
 			
-	//		 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			 
-	//		 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//		 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//}
-
-	
-	this->_stair_case_output_image=rgb_input.clone();
-	
-	if(this->_implementation_on_jetson == false)
-	{
-         cv::imshow("stair case ROI", rgb_input);
-	     cv::waitKey(5);		
-	}
-
-	
-    std::string output_rgb_save_dir;
-	std::string index = std::to_string(string_read_count);
-	
-	if(this->_offline_performance_test == true)
-	{
-		if(1/*this->_stair_case_detc_flag==true*/)
-		{
-			output_rgb_save_dir = this->_result_save_dir + "/" + this->_rgb_image_file + "result"+".png";
-			cv::imwrite( output_rgb_save_dir, this->_stair_case_output_image);
-			
-			if(this->_stair_case_detc_flag==true)
-			{
-			    result_count=result_count+1;
-			}
-		}
+	     cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
+		
 	}
 	
 	
 	
-     
+
 	if(time_debug_flag == true){
     t = ((double)cv::getTickCount() - t)/cv::getTickFrequency();
         printf("[INFO] svm_classifier() ---- took %.4lf ms (%.2lf Hz)\r\n", t*1000.0, (1.0/t));
     }
+	return stair_case_detc_flag;
 	
 }
 
@@ -1328,77 +1246,6 @@ void STAIR_DETECTION_ROS::Lin_depthconversion(cv::Mat& depth_tmp,cv::Mat& depth_
 	
 	
 }
-
-
-void STAIR_DETECTION_ROS::stair_case_detc_rgb_only(const cv::Mat& rgb_input, int final_center_point_col,int final_center_point_row)
-{
-
-	float x_center_pixel;
-	float y_center_pixel;
-	
-    /*vector_for_learning include 8 elements*/
-	/* stair gradient , least square error(x coordinate of map frame (depth) and z coordinate of map frame(rows)) per line,  average error (y coordinate of map frame (cols)), center point x (cam frame), center point y(cam frame), depth, center point x pixel, center point y pixel*/
-	
-	int i=0;
-	
-	   if(this->_stair_case_detc_flag==true)
-	   {
-			cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
-			
-			rectangle_tmp1_pt1.x =final_center_point_col-30;
-		    rectangle_tmp1_pt1.y =final_center_point_row+30;
-		
-		    rectangle_tmp1_pt2.x =final_center_point_col+30;
-		    rectangle_tmp1_pt2.y =final_center_point_row-30;
-			
-			 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			
-	    }
-	//if(stair_case_detc_flag==true)
-	//{
-	//		cv::Point2f  rectangle_tmp1_pt1, rectangle_tmp1_pt2;
-			
-	//		rectangle_tmp1_pt1.x =x_center_pixel-30;
-	//	    rectangle_tmp1_pt1.y =y_center_pixel+30;
-		
-	//	    rectangle_tmp1_pt2.x =x_center_pixel+30;
-	//	    rectangle_tmp1_pt2.y =y_center_pixel-30;
-			
-	//		 cv::rectangle(rgb_input, rectangle_tmp1_pt1, rectangle_tmp1_pt2, cv::Scalar(  150,   150,   30),2/*thickness*/);
-			 
-	//		 std::cout<<"y_coor_cam_frame_tmp : "<<y_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//		 std::cout<<"z_coor_cam_frame_tmp : "<<z_coor_cam_frame_tmp<<"\n"<<std::endl;
-	//}
-
-	
-	this->_stair_case_output_image=rgb_input.clone();
-	
-	if(this->_implementation_on_jetson == false)
-	{
-	   cv::imshow("stair case ROI", rgb_input);
-	   cv::waitKey(5);
-	}
-	
-    std::string output_rgb_save_dir;
-	std::string index = std::to_string(string_read_count);
-	
-	if(this->_offline_performance_test == true)
-	{
-		if(1/*this->_stair_case_detc_flag==true*/)
-		{
-			output_rgb_save_dir = this->_result_save_dir + "/" + this->_rgb_image_file + "result"+".png";
-			cv::imwrite( output_rgb_save_dir, this->_stair_case_output_image);
-			
-			if(this->_stair_case_detc_flag==true)
-			{
-			    result_count=result_count+1;
-			}
-		}
-	}
-
-	
-}
-
 
 
 
