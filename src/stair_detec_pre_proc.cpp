@@ -1,3 +1,39 @@
+/*********************************************************************
+ *
+ * Software License Agreement (BSD License)
+ *
+ *  Copyright (c) 2022, Kangneoung Lee.
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   *The names of its  contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Author: Kangneoung Lee
+ *********************************************************************/
+
 #include "stair_detection/stair_detec_pre_proc.h"
 #include <iostream>
 #include <fstream>
@@ -554,13 +590,13 @@ int min_numof_lines_4_cluster, int predefined_roi_height, int predefined_roi_wid
 		midp_of_all_lines_tmp.at<cv::Vec2f>(m)[1] =  center_p_of_1stlines.at<cv::Vec2f>(m)[1];
 	}
 	
-	for(k=0;k<midpoint_n_second; k++)
-	{
-		midp_of_all_lines_tmp.at<cv::Vec2f>(m)[0] =  center_p_of_2ndlines.at<cv::Vec2f>(k)[0];
-		midp_of_all_lines_tmp.at<cv::Vec2f>(m)[1] =  center_p_of_2ndlines.at<cv::Vec2f>(k)[1];
+	//for(k=0;k<midpoint_n_second; k++)
+	//{
+	//	midp_of_all_lines_tmp.at<cv::Vec2f>(m)[0] =  center_p_of_2ndlines.at<cv::Vec2f>(k)[0];
+	//	midp_of_all_lines_tmp.at<cv::Vec2f>(m)[1] =  center_p_of_2ndlines.at<cv::Vec2f>(k)[1];
 		
-		m++;
-	}
+	//	m++;
+	//}
 	
 	//std::cout<<" m value  :"<< m<<"\n"<<std::endl;
 	//std::cout<<" k value  :"<< k<<"\n"<<std::endl;
