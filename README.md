@@ -9,32 +9,43 @@ Robots capable of traversing flights of stairs play an important role in both in
 
 ![detec_ex](./images/detection_example.png)
 
+
 ## Robot Platfrom
 
 ![robot](./images/robot.jpg)
 
-### Stair Dataset Download (Texas A&M University stair datset: 
+
+### Stair Dataset Download (Texas A&M University stair dataset) 
+
 
 **No. stair images : 2276  No. non_stair images : 546**
+
+
 Dataset includes rgb/depth pair images
 
 **Caemra Info for dataset creation**
+
 
 Model : Intel RealSense D435i
 Image height : 480, Image width : 848
 depth scale factor = 0.001
 fx = 425, fy = 425, px = 423, py = 239
 
+
 **TAMU stair dataset** ([Download 2.0GB](https://drive.google.com/file/d/1QXLhd0iGlAoUfVrATXU_1145bbJWMgmR/view?usp=sharing))
 
 
 ![dataset_sample](./images/dataset_sample.png)
 
-Same stair with different distance
+
+**Same stair with different distance**
+
 
 ![dataset_dist](./images/dataset_dist.png)
 
-Same stair with different view angle
+
+**Same stair with different view angle**
+
 
 ![dataset_angle](./images/dataset_angle.png)
 
