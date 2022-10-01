@@ -27,8 +27,14 @@ Dataset includes rgb/depth pair images
 
 
 Model : Intel RealSense D435i
+
+
 Image height : 480, Image width : 848
+
+
 depth scale factor = 0.001
+
+
 fx = 425, fy = 425, px = 423, py = 239
 
 
