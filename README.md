@@ -11,7 +11,7 @@ Robots capable of traversing flights of stairs play an important role in both in
 
 ## Robot Platfrom
 
-![robot](./images/robot.png)
+![robot](./images/robot.jpg)
 
 ### Stair Dataset Download (Texas A&M University stair datset: 
 
