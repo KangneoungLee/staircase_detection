@@ -194,7 +194,7 @@ bool STAIR_DETEC_ONLINE_FUNC::rule_base_detect(const cv::Mat& rgb_input, const c
 	bool stair_case_detc_flag = false;
 	
 	
-	 bool falsepos_diag_ = true;
+	 bool falsepos_diag_ = false;
 
 	int i=0;
 	/*vector_for_learning include 8 elements*/
@@ -344,7 +344,7 @@ bool STAIR_DETEC_ONLINE_FUNC::rule_base_detect(const cv::Mat& rgb_input, const c
 			}
 			
 			
-			if(1/*false_pos_flag == false*/)
+			if(false_pos_flag == false)
 			{
 			   stair_case_detc_flag = true;
 			
