@@ -845,10 +845,14 @@ bool STAIR_DETEC_ONLINE_FUNC::reject_false_positive(const cv::Mat& depth_input, 
 			
 			float del_beta = deviation_cost_out - deviation_cost_th_interp;
 			if(del_beta<0) del_beta = 0;  /* del_beta < 0 means that deviation cost  is under true region */
+			float fp_del_beta_prob = std::exp(-this->_probability_scale_del_beta*del_beta);
+			if (fp_del_beta_prob < this->_probability_discard_th) return true;
 			
 			float del_gamma = continuity_factor_out - continuity_factor_th_interp;
 			if(del_gamma<0) del_gamma = 0;    /* del_gamma < 0 means that continuitdy factor is under true region */
-
+			float fp_del_gamma_prob = std::exp(-this->_probability_scale_del_gamma*del_gamma);
+			if (fp_del_gamma_prob < this->_probability_discard_th) return true;
+			
 			fp_del_beta_array[validation_count] = del_beta;
 			fp_del_gamma_array[validation_count] = del_gamma;
 		}
@@ -917,10 +921,12 @@ bool STAIR_DETEC_ONLINE_FUNC::reject_false_positive(const cv::Mat& depth_input, 
 			
 			float del_beta = deviation_cost_out - deviation_cost_th_interp;
 			if(del_beta<0) del_beta = 0;  /* del_beta < 0 means that deviation cost  is under true region */
-			
+			float fp_del_beta_prob = std::exp(-this->_probability_scale_del_beta*del_beta);
+			if (fp_del_beta_prob < this->_probability_discard_th) return true;
 			float del_gamma = continuity_factor_out - continuity_factor_th_interp;
 			if(del_gamma<0) del_gamma = 0;    /* del_gamma < 0 means that continuitdy factor is under true region */
-
+			float fp_del_gamma_prob = std::exp(-this->_probability_scale_del_gamma*del_gamma);
+			if (fp_del_gamma_prob < this->_probability_discard_th) return true;
 			fp_del_beta_array[validation_count] = del_beta;
 			fp_del_gamma_array[validation_count] = del_gamma;
 		}
@@ -931,6 +937,6 @@ bool STAIR_DETEC_ONLINE_FUNC::reject_false_positive(const cv::Mat& depth_input, 
 		validation_count++;
 	}
 	
-	 
+	 return false;
 	//center_point_x_coor = ((float)center_point_col - px) * depth_center / fx;
 }
